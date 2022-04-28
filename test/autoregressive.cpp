@@ -98,8 +98,6 @@ int main(int argc, const char *argv[])
     its_sample_t its_sampler;
     alias_sample_t alias_sampler;
     reject_sample_t reject_sampler;
-    second_order_soopt_sample_t soopt_sampler;
-    second_order_opt_alias_sample_t opt_alias_sampler;
 
     // scheduler *scheduler = nullptr;
     sample_policy_t *sampler = nullptr;
@@ -110,10 +108,6 @@ int main(int argc, const char *argv[])
         sampler = &alias_sampler;
     else if (type == "reject")
         sampler = &reject_sampler;
-    else if (type == "soopt")
-        sampler = &soopt_sampler;
-    else if (type == "opt_alias")
-        sampler = &opt_alias_sampler;
     else
         sampler = &its_sampler;
 
