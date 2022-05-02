@@ -1,5 +1,5 @@
-# randgraph
-an novel graph processing system for random walk
+# SOWalker
+an novel second-order graph processing system for random walk
 
 If you want to run in your platform, follow the two steps:
 - `preprocess`, the `preprocess` procedure will process the row graph data, and output the binary csr format. The `preprocess` procedure will generate the following files:

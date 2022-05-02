@@ -157,19 +157,10 @@ public:
     virtual size_t sample(const real_t* first, const real_t* last) {
         return INF;
     }
-    virtual vid_t sample(walk_context<UNBAISEDCONTEXT>& ctx, walk_timer* wtimer) {
+    virtual vid_t sample(walk_context<UNWEIGHTED>& ctx, walk_timer* wtimer) {
         return INF;
     }
-    virtual vid_t sample(walk_context<BIASEDCONTEXT>& ctx, walk_timer* wtimer) {
-        return INF;
-    }
-    virtual vid_t sample(walk_context<SECONDORDERCTX>& ctx, walk_timer* wtimer) {
-        return INF;
-    }
-    virtual vid_t sample(walk_context<BIASEDSECONDORDERCTX>& ctx, walk_timer* wtimer) {
-        return INF;
-    }
-    virtual vid_t sample(walk_context<BIASEDACCSECONDORDERCTX>& ctx, walk_timer* wtimer) {
+    virtual vid_t sample(walk_context<WEIGHTED>& ctx, walk_timer* wtimer) {
         return INF;
     }
     virtual std::string sample_name() const {
@@ -201,27 +192,12 @@ public:
         unsigned int local_seed = time(NULL);
         return naive_sample_impl(first, last, &local_seed);
     }
-    virtual vid_t sample(walk_context<UNBAISEDCONTEXT> &ctx, walk_timer* wtimer)
+    virtual vid_t sample(walk_context<UNWEIGHTED> &ctx, walk_timer* wtimer)
     {
         size_t off = naive_sample_impl(ctx.adj_start, ctx.adj_end, ctx.local_seed);
         return ctx.adj_start[off];
     }
-    virtual vid_t sample(walk_context<BIASEDCONTEXT> &ctx, walk_timer* wtimer)
-    {
-        size_t off = naive_sample_impl(ctx.adj_start, ctx.adj_end, ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-    virtual vid_t sample(walk_context<SECONDORDERCTX> &ctx, walk_timer* wtimer)
-    {
-        size_t off = naive_sample_impl(ctx.adj_start, ctx.adj_end, ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-    virtual vid_t sample(walk_context<BIASEDSECONDORDERCTX> &ctx, walk_timer* wtimer)
-    {
-        size_t off = naive_sample_impl(ctx.adj_start, ctx.adj_end, ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-    virtual vid_t sample(walk_context<BIASEDACCSECONDORDERCTX> &ctx, walk_timer* wtimer)
+    virtual vid_t sample(walk_context<WEIGHTED> &ctx, walk_timer *wtimer)
     {
         size_t off = naive_sample_impl(ctx.adj_start, ctx.adj_end, ctx.local_seed);
         return ctx.adj_start[off];
@@ -252,65 +228,23 @@ public:
         unsigned int local_seed = time(NULL);
         return its_sample_impl(first, last, &local_seed);
     }
-    virtual vid_t sample(walk_context<UNBAISEDCONTEXT> &ctx, walk_timer* wtimer)
-    {
-        size_t off = naive_sample_impl(ctx.adj_start, ctx.adj_end, ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-    virtual vid_t sample(walk_context<BIASEDCONTEXT> &ctx, walk_timer* wtimer)
-    {
-        size_t off = its_sample_impl(ctx.weight_start, ctx.weight_end, ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-    // virtual vid_t sample(walk_context<SECONDORDERCTX> &ctx, walk_timer* wtimer)
-    // {
-    //     wtimer->start_time("its_sample_make_cdf");
-    //     size_t n = static_cast<size_t>(ctx.adj_end - ctx.adj_start);
-    //     std::vector<real_t> adj_weights(n + 1, 0.0);
-    //     for(size_t index = 0; index < n; index++) {
-    //         adj_weights[index+1] = adj_weights[index] + ctx.query_vertex_weight(index);
-    //     }
-    //     wtimer->stop_time("its_sample_make_cdf");
-    //     wtimer->start_time("its_sample_vertex");
-    //     real_t rand_val = adj_weights[n] * (real_t)rand_r(ctx.local_seed) / (real_t)RAND_MAX;
-    //     size_t pos = std::upper_bound(adj_weights.begin(), adj_weights.end(), rand_val) - adj_weights.begin();
-    //     wtimer->stop_time("its_sample_vertex");
-    //     return ctx.adj_start[pos - 1];
-    // }
-    virtual vid_t sample(walk_context<SECONDORDERCTX> &ctx, walk_timer* wtimer)
-    {
-        wtimer->start_time("its_sample_make_cdf");
-        size_t n = static_cast<size_t>(ctx.adj_end - ctx.adj_start);
-        std::vector<real_t> adj_weights(n + 1, 0.0);
-        // for(size_t index = 0; index < n; index++) {
-        //     adj_weights[index+1] = adj_weights[index] + ctx.query_vertex_weight(index);
-        // }
-        ctx.query_neighbors_cdf(adj_weights);
-        wtimer->stop_time("its_sample_make_cdf");
-        wtimer->start_time("its_sample_vertex");
-        real_t rand_val = adj_weights[n] * (real_t)rand_r(ctx.local_seed) / (real_t)RAND_MAX;
-        size_t pos = std::upper_bound(adj_weights.begin(), adj_weights.end(), rand_val) - adj_weights.begin();
-        wtimer->stop_time("its_sample_vertex");
-        return ctx.adj_start[pos - 1];
-    }
-    virtual vid_t sample(walk_context<BIASEDSECONDORDERCTX> &ctx, walk_timer* wtimer)
+
+    virtual vid_t sample(walk_context<UNWEIGHTED> &ctx, walk_timer* wtimer)
     {
         std::vector<real_t> adj_weights;
         ctx.query_neigbors_weight(adj_weights);
         size_t off = its_sample_impl(adj_weights.begin(), adj_weights.end(), ctx.local_seed);
         return ctx.adj_start[off];
     }
-    virtual vid_t sample(walk_context<BIASEDACCSECONDORDERCTX> &ctx, walk_timer* wtimer)
+
+    virtual vid_t sample(walk_context<WEIGHTED> &ctx, walk_timer* wtimer)
     {
-        wtimer->start_time("its_sample_query_neighbors");
         std::vector<real_t> adj_weights;
         ctx.query_neigbors_weight(adj_weights);
-        wtimer->stop_time("its_sample_query_neighbors");
-        wtimer->start_time("its_sample_select_neighbor");
         size_t off = its_sample_impl(adj_weights.begin(), adj_weights.end(), ctx.local_seed);
-        wtimer->stop_time("its_sample_select_neighbor");
         return ctx.adj_start[off];
     }
+
     std::string sample_name() const {
         return "its_sample";
     }
@@ -341,19 +275,7 @@ public:
         return alias_sample_impl(first, last, &local_seed);
     }
 
-    virtual vid_t sample(walk_context<UNBAISEDCONTEXT> &ctx, walk_timer* wtimer)
-    {
-        size_t off = naive_sample_impl(ctx.adj_start, ctx.adj_end, ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-
-    virtual vid_t sample(walk_context<BIASEDCONTEXT> &ctx, walk_timer* wtimer)
-    {
-        size_t off = alias_sample_impl(ctx.weight_start, ctx.weight_end, ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-
-    virtual vid_t sample(walk_context<SECONDORDERCTX> &ctx, walk_timer* wtimer)
+    virtual vid_t sample(walk_context<UNWEIGHTED> &ctx, walk_timer* wtimer)
     {
         std::vector<real_t> adj_weights;
         ctx.query_neigbors_weight(adj_weights);
@@ -361,15 +283,7 @@ public:
         return ctx.adj_start[off];
     }
 
-    virtual vid_t sample(walk_context<BIASEDSECONDORDERCTX> &ctx, walk_timer* wtimer)
-    {
-        std::vector<real_t> adj_weights;
-        ctx.query_neigbors_weight(adj_weights);
-        size_t off = alias_sample_impl(adj_weights.begin(), adj_weights.end(), ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-
-    virtual vid_t sample(walk_context<BIASEDACCSECONDORDERCTX> &ctx, walk_timer* wtimer)
+    virtual vid_t sample(walk_context<WEIGHTED> &ctx, walk_timer* wtimer)
     {
         std::vector<real_t> adj_weights;
         ctx.query_neigbors_weight(adj_weights);
@@ -407,19 +321,7 @@ public:
         return reject_sample_impl(first, last, &local_seed);
     }
 
-    virtual vid_t sample(walk_context<UNBAISEDCONTEXT> &ctx, walk_timer* wtimer)
-    {
-        size_t off = naive_sample_impl(ctx.adj_start, ctx.adj_end, ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-
-    virtual vid_t sample(walk_context<BIASEDCONTEXT> &ctx, walk_timer* wtimer)
-    {
-        size_t off = reject_sample_impl(ctx.weight_start, ctx.weight_end, ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-
-    virtual vid_t sample(walk_context<SECONDORDERCTX> &ctx, walk_timer* wtimer)
+    virtual vid_t sample(walk_context<UNWEIGHTED> &ctx, walk_timer* wtimer)
     {
         wtimer->start_time("reject_sample");
         size_t n = static_cast<size_t>(ctx.adj_end - ctx.adj_start);
@@ -444,15 +346,7 @@ public:
         return ctx.adj_start[rand_pos];
     }
 
-    virtual vid_t sample(walk_context<BIASEDSECONDORDERCTX> &ctx, walk_timer* wtimer)
-    {
-        std::vector<real_t> adj_weights;
-        ctx.query_neigbors_weight(adj_weights);
-        size_t off = reject_sample_impl(adj_weights.begin(), adj_weights.end(), ctx.local_seed);
-        return ctx.adj_start[off];
-    }
-
-    virtual vid_t sample(walk_context<BIASEDACCSECONDORDERCTX> &ctx, walk_timer* wtimer)
+    virtual vid_t sample(walk_context<WEIGHTED> &ctx, walk_timer *wtimer)
     {
         std::vector<real_t> adj_weights;
         ctx.query_neigbors_weight(adj_weights);
@@ -465,26 +359,13 @@ public:
     }
 };
 
-template<CtxType ctx_type>
-bool accept_sampler(walk_context<ctx_type> &ctx) { return true; }
 
-template<>
-bool accept_sampler<SECONDORDERCTX>(walk_context<SECONDORDERCTX>& ctx) {
-    real_t pmax = ctx.query_max_weight(), pmin = ctx.query_min_weight();
-    if(pmax / pmin > 10.0) return false;
-    return true;
-}
-
-template<CtxType ctx_type>
-vid_t vertex_sample(walk_context<ctx_type> &ctx, sample_policy_t *sampler, walk_timer *wtimer = nullptr, bool dynamic = false) {
+template<WeightType wht_type>
+vid_t vertex_sample(walk_context<wht_type> &ctx, sample_policy_t *sampler, walk_timer *wtimer = nullptr) {
     eid_t deg = (eid_t)(ctx.adj_end - ctx.adj_start);
     if(deg == 0) return rand_r(ctx.local_seed) % ctx.nvertices;
     else if(deg == 1) return *ctx.adj_start;
     else {
-        if(dynamic && !accept_sampler(ctx)) {
-            its_sample_t its_sampler;
-            return its_sampler.sample(ctx, wtimer);
-        }
         return sampler->sample(ctx, wtimer);
     }
 }

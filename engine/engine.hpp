@@ -4,16 +4,15 @@
 #include <functional>
 #include "cache.hpp"
 #include "schedule.hpp"
-#include "apps/userprogram.hpp"
 #include "util/timer.hpp"
 #include "metrics/metrics.hpp"
 #include "sample.hpp"
+#include "apps/secondorder.hpp"
 
-template<typename walk_data_t, WalkType walk_type>
 class graph_engine {
 public:
     graph_cache                         *cache;
-    graph_walk<walk_data_t, walk_type>  *walk_manager;
+    graph_walk                          *walk_manager;
     graph_driver                        *driver;
     graph_config                        *conf;
     graph_timer                         gtimer;
@@ -28,7 +27,7 @@ public:
 #endif
     
 
-    graph_engine(graph_cache& _cache, graph_walk<walk_data_t, walk_type>& manager, graph_driver& _driver, graph_config& _conf, metrics &m) : _m(m){
+    graph_engine(graph_cache& _cache, graph_walk& manager, graph_driver& _driver, graph_config& _conf, metrics &m) : _m(m){
         cache         = &_cache;
         walk_manager = &manager;
         driver        = &_driver;
@@ -45,8 +44,7 @@ public:
 
     }
 
-    template <typename AppType, typename AppConfig>
-    void prologue(userprogram_t<AppType, AppConfig> &userprogram, std::function<void(graph_walk<walk_data_t, walk_type> *)> init_func = nullptr)
+    void prologue(second_order_app_t &userprogram, std::function<void(graph_walk *)> init_func = nullptr)
     {
         logstream(LOG_INFO) << "  =================  STARTED  ======================  " << std::endl;
         logstream(LOG_INFO) << "Random walks, random generate " << userprogram.get_numsources() << " walks on whole graph, exec_threads = " << conf->nthreads << std::endl;
@@ -59,8 +57,7 @@ public:
         userprogram.prologue(walk_manager, init_func);
     }
 
-    template <typename BaseType, typename AppType, typename AppConfig>
-    void run(userprogram_t<AppType, AppConfig> &userprogram, scheduler<BaseType> *block_scheduler, sample_policy_t *sampler)
+    void run(second_order_app_t &userprogram, scheduler *block_scheduler, sample_policy_t *sampler)
     {
         logstream(LOG_DEBUG) << "graph blocks : " << walk_manager->global_blocks->nblocks << ", memory blocks : " << cache->ncblock << std::endl;
         logstream(LOG_INFO) << "Random walks start executing, please wait for a minute." << std::endl;
@@ -106,8 +103,7 @@ public:
         logstream(LOG_DEBUG) << gtimer.runtime() << "s, total run count : " << run_count << std::endl;
     }
 
-    template <typename AppType, typename AppConfig>
-    void epilogue(userprogram_t<AppType, AppConfig> &userprogram)
+    void epilogue(second_order_app_t &userprogram)
     {
         userprogram.epilogue();
         _m.stop_time("run_app");
@@ -117,8 +113,7 @@ public:
         logstream(LOG_INFO) << "  ================= FINISHED ======================  " << std::endl;
     }
 
-    template <typename AppType, typename AppConfig>
-    void update_walk(userprogram_t<AppType, AppConfig> &userprogram, wid_t nwalks, sample_policy_t *sampler)
+    void update_walk(second_order_app_t &userprogram, wid_t nwalks, sample_policy_t *sampler)
     {
         if(nwalks < 100) omp_set_num_threads(1);
         else omp_set_num_threads(conf->nthreads);
@@ -128,7 +123,7 @@ public:
             wid_t run_steps = 0;
             #pragma omp parallel for reduction(+: run_steps)
             for(wid_t idx = 0; idx < nwalks; idx++) {
-                run_steps += userprogram.update_walk(walk_manager->walks[idx], cache, walk_manager, sampler, &seeds[omp_get_thread_num()], conf->dynamic);
+                run_steps += userprogram.update_walk(walk_manager->walks[idx], cache, walk_manager, sampler, &seeds[omp_get_thread_num()]);
             }
 #ifdef PROF_STEPS
             total_times++;

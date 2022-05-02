@@ -62,11 +62,14 @@ RM28_DATASET="/home/hsc/graphdataset/rmat28/rmat28.txt"
 #     ./bin/test/node2vec $UK_DATASET sample reject length 20 walkpersource 1 iter $ITER
 # done
 
-for DATASET in $CF_DATASET $UK_DATASET $RM28_DATASET
-do
-    for ITER in 1100 1200 1300 1400 1500 1600 1700 1800 1900 2000
-    do
-        echo "apps = node2vec, dataset = $DATASET, length = 20, sample = reject"
-        ./bin/test/node2vec $DATASET sample reject length 20 walkpersource 1 iter $ITER
-    done
-done
+# for DATASET in $CF_DATASET $UK_DATASET $RM28_DATASET
+# do
+#     for ITER in 1100 1200 1300 1400 1500 1600 1700 1800 1900 2000
+#     do
+#         echo "apps = node2vec, dataset = $DATASET, length = 20, sample = reject"
+#         ./bin/test/node2vec $DATASET sample reject length 20 walkpersource 1 iter $ITER
+#     done
+# done
+
+./bin/test/node2vec $SL_DATASET sample reject length 20 walkpersource 1
+# ./bin/test/autoregressive $SL_DATASET sample its length 20 walksource 1000000

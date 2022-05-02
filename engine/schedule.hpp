@@ -26,94 +26,124 @@ struct rank_compare {
     }
 };
 
-struct walk_scheduler_config_t {
-    graph_config conf;
-    float p;
-};
-
 /** graph_scheduler
  *
  * This file contribute to define the interface how to schedule cache blocks
  */
 
-class base_scheduler {
+class scheduler {
 protected:
     metrics &_m;
 
 public:
-    base_scheduler(metrics& m) : _m(m) {  }
+    scheduler(metrics& m) : _m(m) {  }
 
-    ~base_scheduler() {}
+    virtual bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager) {
+        return 0;
+    }
+
+    ~scheduler() {}
 };
 
-class graph_scheduler : public base_scheduler {
+/**
+ * The naive second-order scheduler which follows the graphwalker major constribution
+ * In each schedule, load the block that has the most number of walks and processes them
+ */
+class navie_graphwalker_scheduler_t : public scheduler
+{
 private:
-    bid_t exec_blk;                   /* the current cache block index used for run */
-    bid_t nrblock;                    /* number of cache blocks are used for running */
-public:
-    graph_scheduler(metrics &m) : base_scheduler(m) {
-        exec_blk = 0;
-        nrblock = 0;
-    }
+    std::vector<bid_t> buckets;
+    bid_t exec_blk;
+    size_t index;
 
-    /** If the cache block has no walk, then swap out all blocks */
-    template <typename walk_data_t, WalkType walk_type>
-    bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk<walk_data_t, walk_type> &walk_manager)
+    bid_t choose_block(graph_walk &walk_manager)
     {
-        if(walk_manager.test_finished_cache_walks(&cache)) {
-            swap_blocks(cache, driver, walk_manager.global_blocks);
-        }
-        bid_t ret = exec_blk;
-        exec_blk++;
-        if(exec_blk >= nrblock) exec_blk = 0;
-        return cache.cache_blocks[ret].block->blk;
-    }
-
-    void swap_blocks(graph_cache& cache, graph_driver& driver, graph_block* global_blocks) {
-        // set the all cached blocks inactive */
-        _m.start_time("graph_scheduler_swap_blocks");
-        for(bid_t p = 0; p < cache.ncblock; p++) {
-            if(cache.cache_blocks[p].block != NULL) {
-                cache.cache_blocks[p].block->cache_index = global_blocks->nblocks;
-                cache.cache_blocks[p].block->status = INACTIVE;
+        bid_t target_block = 0, nblocks = walk_manager.global_blocks->nblocks;
+        wid_t max_walks = 0;
+        for (bid_t cblk = 0; cblk < nblocks; ++cblk)
+        {
+            wid_t nwalks = 0;
+            for (bid_t pblk = 0; pblk < nblocks; ++pblk)
+                nwalks += walk_manager.nblockwalks(pblk * nblocks + cblk);
+            if (nwalks > max_walks)
+            {
+                max_walks = nwalks;
+                target_block = cblk;
             }
         }
+        return target_block;
+    }
 
+    bid_t swap_block(graph_cache &cache, graph_walk &walk_manager, bid_t exclude_block)
+    {
         bid_t blk = 0;
-        std::vector<bid_t> blocks = choose_blocks(cache.ncblock, global_blocks);
-        nrblock = blocks.size();
-        exec_blk = 0;
-
-        for(const auto & p : blocks) {
-            driver.load_block_info(cache, global_blocks, blk, p);
-            blk++;
-        }
-
-        for(; blk < cache.ncblock; blk++) {
-            if(cache.cache_blocks[blk].block) {
-                cache.cache_blocks[blk].block = NULL;
+        int life = -1;
+        for (bid_t p = 0; p < cache.ncblock; ++p)
+        {
+            if (cache.cache_blocks[p].block == NULL)
+            {
+                blk = p;
+                break;
+            }
+            if (cache.cache_blocks[p].life > life && cache.cache_blocks[p].block->blk != exclude_block)
+            {
+                blk = p;
+                life = cache.cache_blocks[p].life;
             }
         }
-        _m.stop_time("graph_scheduler_swap_blocks");
+        if (cache.cache_blocks[blk].block != NULL)
+        {
+            cache.cache_blocks[blk].block->cache_index = walk_manager.global_blocks->nblocks;
+        }
+        return blk;
     }
 
-    std::vector<bid_t> choose_blocks(bid_t ncblocks, graph_block* global_blocks) {
-        std::vector<bid_t> blocks;
-        std::priority_queue<std::pair<bid_t, rank_t>, std::vector<std::pair<bid_t, rank_t>>, rank_compare<rank_t>> pq;
-        for(bid_t blk = 0; blk < global_blocks->nblocks; blk++) {
-            pq.push(std::make_pair(blk, global_blocks->blocks[blk].rank));
+    void swapin_block(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager, bid_t select_block, bid_t exclude_blk)
+    {
+        bid_t cache_index = (*(walk_manager.global_blocks))[select_block].cache_index;
+        if (cache_index == walk_manager.global_blocks->nblocks)
+        {
+            cache_index = swap_block(cache, walk_manager, exclude_blk);
+            driver.load_block_info(cache, walk_manager.global_blocks, cache_index, select_block);
+        }
+        cache.cache_blocks[cache_index].life = 0;
+    }
+
+public:
+    navie_graphwalker_scheduler_t(metrics &m) : scheduler(m) {
+        index = 0;
+    }
+
+    bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
+    {
+        bid_t nblocks = walk_manager.global_blocks->nblocks;
+        while(index >= buckets.size()) {
+            buckets.clear();
+            exec_blk = choose_block(walk_manager);
+            swapin_block(cache, driver, walk_manager, exec_blk, nblocks);
+            for (bid_t p = 0; p < cache.ncblock; ++p)
+                cache.cache_blocks[p].life++;
+            for (bid_t blk = 0; blk < walk_manager.global_blocks->nblocks; blk++)
+            {
+                if (walk_manager.nblockwalks(blk * nblocks + exec_blk) > 0 || walk_manager.nblockwalks(exec_blk * nblocks + blk) > 0)
+                {
+                    buckets.push_back(blk);
+                }
+            }
+            index = 0;
         }
 
-        while(!pq.empty() && ncblocks) {
-            auto kv = pq.top();
-            if(kv.second == 0) break;
-            blocks.push_back(kv.first);
-            pq.pop();
-            ncblocks--;
+        bid_t blk = buckets[index];
+        swapin_block(cache, driver, walk_manager, blk, exec_blk);
+        if (walk_manager.nblockwalks(blk * nblocks + exec_blk) > 0) {
+            cache.walk_blocks.push_back(blk * nblocks + exec_blk);
         }
-        std::sort(blocks.begin(), blocks.end());
 
-        return blocks;
+        if (blk != exec_blk && walk_manager.nblockwalks(exec_blk * nblocks + blk) > 0) {
+            cache.walk_blocks.push_back(exec_blk * nblocks + blk);
+        }
+        index++;
+        return 0;
     }
 };
 
@@ -121,18 +151,14 @@ public:
  * The following scheduler is the surfer scheduler
  * the scheduler selects one block at first, if the total walks is less than 1000, then choose two blocks
  */
-class simulated_annealing_scheduler_t : public base_scheduler
+class simulated_annealing_scheduler_t : public scheduler
 {
 private:
     std::vector<bid_t> bucket_sequences;
     std::vector<bid_t> buckets;
     size_t index, max_iter;
 
-
-    template <typename walk_data_t, WalkType walk_type>
-    void choose_blocks(graph_cache &cache, graph_walk<walk_data_t, walk_type> &walk_manager) {}
-
-    void choose_blocks(graph_cache &cache, graph_driver &driver, graph_walk<vid_t, SecondOrder> &walk_manager)
+    void choose_blocks(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
     {
         std::unordered_set<bid_t> cache_blocks;
         for(bid_t blk = 0; blk < cache.ncblock; blk++) {
@@ -185,16 +211,6 @@ private:
         std::vector<bid_t> candidate_blocks(cache.ncblock);
         for (bid_t blk = 0; blk < cache.ncblock; blk++) candidate_blocks[blk] = block_indexs[blk];
 
-        // auto cal_nwalks = [&block_walks, nblocks](const std::vector<bid_t>& blocks) {
-        //     wid_t nwalks = 0;
-        //     for(auto p_blk : blocks) {
-        //         for(auto c_blk : blocks) {
-        //             nwalks += block_walks[p_blk * nblocks + c_blk];
-        //         }
-        //     }
-        //     return nwalks;
-        // };
-
 #ifdef EXPECT_SCHEDULE
         auto cal_score = [&block_walks, &walk_manager, nblocks](const std::vector<bid_t>& blocks) {
             wid_t score = 0;
@@ -221,38 +237,21 @@ private:
             // real_t T = 100.0, alpha = 0.2;
             size_t iter = 0;
             size_t can_comm = 0;
-            // wid_t can_nwalks = cal_nwalks(candidate_blocks);
             for(auto blk : candidate_blocks) if(cache_blocks.find(blk) != cache_blocks.end()) can_comm++;
             real_t y_can = cal_score(candidate_blocks) / (cache.ncblock - can_comm);
-
-            // real_t y_can = (real_t)can_nwalks / (cache.ncblock - can_comm);
-            // std::cout << "candidate walks : " << can_nwalks << ", y_can : " << y_can << std::endl;
-
-            // std::cout << "block index : ";
-            // for(auto blk : block_indexs) std::cout << blk << " ";
-            // std::cout << std::endl;
 
             while(iter < max_iter) {
                 std::vector<bid_t> tmp_blocks = candidate_blocks;
                 size_t pos = rand() % (nblocks - cache.ncblock) + cache.ncblock, tmp_pos = rand() % cache.ncblock;
                 std::swap(tmp_blocks[tmp_pos], block_indexs[pos]);
-                // wid_t tmp_nwalks = cal_nwalks(tmp_blocks);
                 size_t tmp_comm = 0;
                 for(auto blk : tmp_blocks) if(cache_blocks.find(blk) != cache_blocks.end()) tmp_comm++;
-                // real_t y_tmp = (real_t)tmp_nwalks / (cache.ncblock - tmp_comm);
                 real_t y_tmp = 0.0;
                 if(tmp_comm < cache.ncblock) y_tmp = cal_score(tmp_blocks) / (cache.ncblock - tmp_comm);
 
                 if(y_tmp > y_can) {
-                    // std::cout << "candidate blocks : ";
-                    // for(auto blk : candidate_blocks) std::cout << blk << " ";
-                    // std::cout << std::endl;
-                    // std::cout << "tmp blocks : ";
-                    // for(auto blk : tmp_blocks) std::cout << blk << " ";
-                    // std::cout << std::endl;
                     candidate_blocks = tmp_blocks;
                     y_can = y_tmp;
-                    // std::cout << "tmp walks : " << tmp_nwalks << ", tmp_can : " << y_tmp  << ", pos" << pos << std::endl;
                 } else {
                     std::swap(tmp_blocks[tmp_pos], block_indexs[pos]);
                 }
@@ -285,7 +284,6 @@ private:
             if(cache.cache_blocks[pos].block != NULL) {
                 cache.cache_blocks[pos].block->cache_index = nblocks;
             }
-            // std::cout << "load block info, blk = " << blk << " -> cache_index = " << pos << std::endl;
             driver.load_block_info(cache, walk_manager.global_blocks, pos, blk);
             pos++;
         }
@@ -303,15 +301,13 @@ private:
     }
 
 public:
-    simulated_annealing_scheduler_t(metrics &m) : base_scheduler(m)
+    simulated_annealing_scheduler_t(size_t param_max_iter, metrics &m) : scheduler(m)
     {
+        max_iter = param_max_iter;
         index = 0;
-        max_iter = m.get_max_iter();
-        std::cout << "max_iter : " << max_iter << std::endl;
     }
 
-    template <typename walk_data_t, WalkType walk_type>
-    bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk<walk_data_t, walk_type> &walk_manager)
+    bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
     {
         _m.start_time("simulated_annealing_scheduler_swap_blocks");
         choose_blocks(cache, driver, walk_manager);
@@ -320,17 +316,14 @@ public:
     }
 };
 
-class lp_solver_scheduler_t : public base_scheduler
+class lp_solver_scheduler_t : public scheduler
 {
 private:
     std::vector<bid_t> bucket_sequences;
     std::vector<bid_t> buckets;
     size_t index, max_iter;
 
-    template <typename walk_data_t, WalkType walk_type>
-    void choose_blocks(graph_cache &cache, graph_walk<walk_data_t, walk_type> &walk_manager) {}
-
-    void choose_blocks(graph_cache &cache, graph_driver &driver, graph_walk<vid_t, SecondOrder> &walk_manager)
+    void choose_blocks(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
     {
         std::unordered_set<bid_t> cache_blocks;
         std::vector<bool> lp_cache_blocks(walk_manager.nblocks, false);
@@ -534,31 +527,17 @@ private:
     }
 
 public:
-    lp_solver_scheduler_t(metrics &m) : base_scheduler(m)
+    lp_solver_scheduler_t(metrics &m) : scheduler(m)
     {
         index = 0;
-        max_iter = m.get_max_iter();
-        std::cout << "max_iter : " << max_iter << std::endl;
     }
 
-    template <typename walk_data_t, WalkType walk_type>
-    bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk<walk_data_t, walk_type> &walk_manager)
+    bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
     {
         _m.start_time("simulated_annealing_scheduler_swap_blocks");
         choose_blocks(cache, driver, walk_manager);
         _m.stop_time("simulated_annealing_scheduler_swap_blocks");
         return 0;
-    }
-};
-
-template<typename BaseType>
-class scheduler : public BaseType {
-public:
-    scheduler(metrics &m) : BaseType(m) { }
-
-    template <typename walk_data_t, WalkType walk_type>
-    bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk<walk_data_t, walk_type> &walk_manager) {
-        return BaseType::schedule(cache, driver, walk_manager);
     }
 };
 

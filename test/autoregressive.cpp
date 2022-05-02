@@ -9,7 +9,6 @@
 #include "logger/logger.hpp"
 #include "util/io.hpp"
 #include "util/util.hpp"
-#include "apps/userprogram.hpp"
 #include "metrics/metrics.hpp"
 #include "metrics/reporter.hpp"
 #include "apps/secondorder.hpp"
@@ -28,8 +27,6 @@ int main(int argc, const char *argv[])
     eid_t nedges;
     bool weighted = get_option_bool("weighted");
     bool reordered = get_option_bool("reordered");
-    bool filter = get_option_bool("filter");
-    bool dynamic = get_option_bool("dynamic");
     size_t max_iter = get_option_int("iter", 30);
 
     size_t cache_size = get_option_int("cache", MEMORY_CACHE / (1024LL * 1024 * 1024));
@@ -48,51 +45,51 @@ int main(int argc, const char *argv[])
         nvertices,
         nedges,
         weighted,
-        reordered,
-        filter,
-        dynamic
+        reordered
     };
 
     graph_block blocks(&conf);
     bid_t nmblocks = get_option_int("nmblocks", blocks.nblocks);
 
     metrics m("autoregressive_walksource_" + std::to_string(walks) + "_steps_" + std::to_string(steps) + "_dataset_" + argv[1] + "_iter_" + std::to_string(max_iter));
-    m.set_max_iter(max_iter);
     graph_driver driver(&conf, m);
 
-    graph_walk<vid_t, SecondOrder> walk_mangager(conf, driver, blocks);
+    graph_walk walk_mangager(conf, driver, blocks);
 
     graph_cache cache(min_value(nmblocks, blocks.nblocks), &conf);
 
-    second_order_param_t app_param = { alpha, (real_t)(1.0 - alpha), (real_t)(1.0 - alpha), (real_t)(1.0 - alpha)};
-    second_order_conf_t app_conf = {walks, steps, app_param};
-
-    second_order_func_t app_func;
-    app_func.query_equal_func = [&alpha](const vertex_t& prev_vertex, const vertex_t& cur_vertex) {
+    transit_func_t app_func;
+    app_func.query_equal_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
+    {
         vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
         return (1.0 - alpha) * max_degree / cur_vertex.degree;
     };
-    app_func.query_comm_neighbor_func = [&alpha](const vertex_t& prev_vertex, const vertex_t& cur_vertex) {
+    app_func.query_comm_neighbor_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
+    {
         vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
         return (1.0 - alpha) * max_degree / cur_vertex.degree +  alpha * max_degree / prev_vertex.degree;
     };
-    app_func.query_other_vertex_func = [&alpha](const vertex_t& prev_vertex, const vertex_t& cur_vertex) {
+    app_func.query_other_vertex_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
+    {
         vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
         return (1.0 - alpha) * max_degree / cur_vertex.degree;
     };
-    app_func.query_upper_bound_func = [&alpha](const vertex_t& prev_vertex, const vertex_t& cur_vertex) {
+    app_func.query_upper_bound_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
+    {
         vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
-        if(prev_vertex.degree > 0) return (1.0 - alpha) * max_degree / cur_vertex.degree +  alpha * max_degree / prev_vertex.degree;
-        else return (1.0 - alpha) * max_degree / cur_vertex.degree;
+        if(prev_vertex.degree > 0)
+            return (1.0 - alpha) * max_degree / cur_vertex.degree + alpha * max_degree / prev_vertex.degree;
+        else
+            return (1.0 - alpha) * max_degree / cur_vertex.degree;
     };
-    app_func.query_lower_bound_func = [&alpha](const vertex_t& prev_vertex, const vertex_t& cur_vertex) {
+    app_func.query_lower_bound_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
+    {
         vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
         return (1.0 - alpha) * max_degree / cur_vertex.degree;
     };
-    app_conf.func_param = app_func;
 
-    userprogram_t<second_order_app_t, second_order_conf_t> userprogram(app_conf);
-    graph_engine<vid_t, SecondOrder> engine(cache, walk_mangager, driver, conf, m);
+    second_order_app_t userprogram(walks, steps, app_func);
+    graph_engine engine(cache, walk_mangager, driver, conf, m);
 
     naive_sample_t naive_sampler;
     its_sample_t its_sampler;
@@ -113,17 +110,15 @@ int main(int argc, const char *argv[])
 
     logstream(LOG_INFO) << "sample policy : " << sampler->sample_name() << std::endl;
 
-    scheduler<lp_solver_scheduler_t> walk_scheduler(m);
-    // complex_sample_context_t sample_context(sampler, &its_sampler);
-    // naive_sample_context_t sample_context(sampler);
+    lp_solver_scheduler_t walk_scheduler(m);
 
-    auto init_func = [walks, steps](graph_walk<vid_t, SecondOrder> *walk_manager)
+    auto init_func = [walks, steps](graph_walk *walk_manager)
     {
         #pragma omp parallel for schedule(static)
         for(wid_t off = 0; off < walks; off++)
         {
             vid_t vertex = rand() % walk_manager->nvertices;
-            walker_t<vid_t> walker = walker_makeup<vid_t>(vertex, off, vertex, vertex, steps);
+            walker_t walker = walker_makeup(vertex, off, vertex, vertex, steps);
             walk_manager->move_walk(walker);
         }
     };

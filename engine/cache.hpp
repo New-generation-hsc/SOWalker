@@ -86,14 +86,6 @@ public:
     vid_t *csr;
     real_t *weights;
 
-    /* the following two field just for alias table sample method */
-    real_t *prob;
-    vid_t  *alias;
-    real_t *acc_weights;
-
-    bool loaded_alias;
-    BloomFilter *bf;
-
     /**
      * record each block life, when swap out, the largest life block will be evicted
      */
@@ -105,12 +97,7 @@ public:
         degree  = NULL;
         csr     = NULL;
         weights = NULL;
-        prob    = NULL;
-        alias   = NULL;
-        acc_weights = NULL;
-        bf = nullptr;
         life = 0;
-        loaded_alias = false;
     }
 
     ~cache_block() {
@@ -118,14 +105,6 @@ public:
         if(degree)  free(degree);
         if(csr)     free(csr);
         if(weights) free(weights);
-        if(prob)    free(prob);
-        if(alias)   free(alias);
-        if(acc_weights) free(acc_weights);
-        if(bf) delete bf;
-    }
-
-    void make_filter(bool filter) {
-        if(filter) bf = new BloomFilter;
     }
 };
 
@@ -135,11 +114,6 @@ void swap(cache_block& cb1, cache_block& cb2) {
     vid_t *tdegree  = cb2.degree;
     vid_t *tcsr     = cb2.csr;
     real_t *tw      = cb2.weights;
-    real_t *tp      = cb2.prob;
-    vid_t *ta       = cb2.alias;
-    real_t *tacc    = cb2.acc_weights;
-    BloomFilter *tbf = cb2.bf;
-    bool tl         = cb2.loaded_alias;
     int tlife       = cb2.life;
 
     cb2.block = cb1.block;
@@ -147,11 +121,6 @@ void swap(cache_block& cb1, cache_block& cb2) {
     cb2.degree = cb1.degree;
     cb2.csr = cb1.csr;
     cb2.weights = cb1.weights;
-    cb2.prob    = cb1.prob;
-    cb2.alias   = cb1.alias;
-    cb2.acc_weights = cb1.acc_weights;
-    cb2.bf      = cb1.bf;
-    cb2.loaded_alias = cb1.loaded_alias;
     cb2.life    = cb1.life;
 
     cb1.block = tblock;
@@ -159,11 +128,6 @@ void swap(cache_block& cb1, cache_block& cb2) {
     cb1.degree = tdegree;
     cb1.csr = tcsr;
     cb1.weights = tw;
-    cb1.prob = tp;
-    cb1.alias = ta;
-    cb1.acc_weights = tacc;
-    cb1.bf = tbf;
-    cb1.loaded_alias = tl;
     cb1.life = tlife;
 }
 
@@ -241,7 +205,6 @@ public:
 
     graph_cache(bid_t nblocks, graph_config *conf) {
         setup(nblocks, conf->cache_size, conf->blocksize);
-        for(auto & cblk : cache_blocks) cblk.make_filter(conf->filter);
     }
 
     cache_block& operator[](size_t index) {
@@ -268,29 +231,6 @@ public:
             }
         }
         return false;
-    }
-};
-
-template <typename walk_data_t, WalkType walk_type>
-struct walk_data_block {
-    static bid_t get(const walker_t<walk_data_t> &walker, graph_block *global_blocks) {
-        return 0;
-    }
-};
-
-template <typename walk_data_t>
-struct walk_data_block<walk_data_t, FirstOrder> {
-    static bid_t get(const walker_t<walk_data_t> &walker, graph_block *global_blocks) {
-        return global_blocks->get_block(WALKER_POS(walker));
-    }
-};
-
-template <typename walk_data_t>
-struct walk_data_block<walk_data_t, SecondOrder> {
-    static bid_t get(const walker_t<walk_data_t> &walker, graph_block *global_blocks) {
-        bid_t pblk = global_blocks->get_block(get_vertex_from_walk(walker.data));
-        bid_t cblk = global_blocks->get_block(WALKER_POS(walker));
-        return pblk * global_blocks->nblocks + cblk;
     }
 };
 
