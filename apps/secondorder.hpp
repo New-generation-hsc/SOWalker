@@ -17,14 +17,16 @@ private:
     wid_t _walkpersource;
     hid_t _hops;
     transit_func_t func_param;
+    bool continue_update;
     walk_timer wtimer;
 
 public:
-    second_order_app_t(wid_t nwalks, hid_t steps, transit_func_t app_func)
+    second_order_app_t(wid_t nwalks, hid_t steps, transit_func_t app_func, bool c_update = true)
     {
         _walkpersource = nwalks;
         _hops = steps;
         func_param = app_func;
+        continue_update = c_update;
     }
 
     void prologue(graph_walk *walk_manager, std::function<void(graph_walk *walk_manager)> init_func = nullptr)
@@ -83,15 +85,16 @@ public:
             wtimer.stop_time("vertex_sample");
             prev_vertex = cur_vertex;
             cur_vertex = next_vertex;
+            hop--;
+            run_step++;
 
             prev_cache_index = cur_cache_index;
             if (!(cur_vertex >= cur_block->block->start_vert && cur_vertex < cur_block->block->start_vert + cur_block->block->nverts))
             {
                 cur_blk = walk_manager->global_blocks->get_block(cur_vertex);
                 cur_cache_index = (*(walk_manager->global_blocks))[cur_blk].cache_index;
+                if(!continue_update) break;
             }
-            hop--;
-            run_step++;
         }
         wtimer.stop_time("walker_update");
 

@@ -68,7 +68,7 @@ int main(int argc, const char *argv[])
     app_func.query_lower_bound_func = [&p, &q](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
     { return std::min(1.0 / p, std::min(1.0, 1.0 / q)); };
 
-    second_order_app_t userprogram(walks, steps, app_func);
+    second_order_app_t userprogram(walks, steps, app_func, false);
     graph_engine engine(cache, walk_mangager, driver, conf, m);
 
     its_sample_t its_sampler(true);
