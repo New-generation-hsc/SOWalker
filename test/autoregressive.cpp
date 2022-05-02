@@ -118,7 +118,7 @@ int main(int argc, const char *argv[])
         for(wid_t off = 0; off < walks; off++)
         {
             vid_t vertex = rand() % walk_manager->nvertices;
-            walker_t walker = walker_makeup(vertex, off, vertex, vertex, steps);
+            walker_t walker = walker_makeup(off, vertex, vertex, vertex, steps);
             walk_manager->move_walk(walker);
         }
     };

@@ -44,6 +44,29 @@ walker_t walker_makeup(wid_t id, vid_t source, vid_t previous, vid_t pos, hid_t 
     return walk_data;
 }
 
+// struct walker_t {
+//     wid_t id;
+//     vid_t source, previous, current;
+//     bid_t hop;
+// };
+
+// #define WALKER_ID(walk) (walk.id)
+// #define WALKER_SOURCE(walk) (walk.source)
+// #define WALKER_PREVIOUS(walk) (walk.previous)
+// #define WALKER_POS(walk) (walk.current)
+// #define WALKER_HOP(walk) (walk.hop)
+
+// walker_t walker_makeup(wid_t id, vid_t source, vid_t previous, vid_t pos, hid_t hop)
+// {
+//     walker_t walk_data;
+//     walk_data.id = id;
+//     walk_data.source = source;
+//     walk_data.previous = previous;
+//     walk_data.current = pos;
+//     walk_data.hop = hop;
+//     return walk_data;
+// }
+
 struct transit_context_t { 
     vid_t vertex, degree;
     real_t *wht;

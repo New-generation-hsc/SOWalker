@@ -68,7 +68,7 @@ int main(int argc, const char *argv[])
     app_func.query_lower_bound_func = [&p, &q](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
     { return std::min(1.0 / p, std::min(1.0, 1.0 / q)); };
 
-    second_order_app_t userprogram(walks, steps, app_func, false);
+    second_order_app_t userprogram(walks, steps, app_func);
     graph_engine engine(cache, walk_mangager, driver, conf, m);
 
     its_sample_t its_sampler(true);
@@ -90,8 +90,8 @@ int main(int argc, const char *argv[])
     logstream(LOG_INFO) << "sample policy : " << sampler->sample_name() << std::endl;
 
     // lp_solver_scheduler_t walk_scheduler(m);
-    // simulated_annealing_scheduler_t walk_scheduler(max_iter, m);
-    navie_graphwalker_scheduler_t walk_scheduler(m);
+    simulated_annealing_scheduler_t walk_scheduler(max_iter, m);
+    // navie_graphwalker_scheduler_t walk_scheduler(m);
 
     auto init_func = [walks, steps](graph_walk *walk_manager)
     {
@@ -100,7 +100,7 @@ int main(int argc, const char *argv[])
         {
             wid_t idx = vertex * walks;
             for(wid_t off = 0; off < walks; off++) {
-                walker_t walker = walker_makeup(vertex, idx + off, vertex, vertex, steps);
+                walker_t walker = walker_makeup(idx + off, vertex, vertex, vertex, steps);
                 walk_manager->move_walk(walker);
             }
         }

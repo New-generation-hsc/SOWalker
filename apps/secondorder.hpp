@@ -52,6 +52,11 @@ public:
         // unsigned seed = (unsigned)(cur_vertex + prev_vertex + hop + tid + time(NULL));
         bid_t cur_cache_index = (*(walk_manager->global_blocks))[cur_blk].cache_index, prev_cache_index = (*(walk_manager->global_blocks))[prev_blk].cache_index;
         bid_t nblocks = walk_manager->global_blocks->nblocks;
+        if(cur_cache_index == nblocks || prev_cache_index == nblocks) {
+            std::cout << "vertex : " << cur_vertex << " " << prev_vertex << std::endl;
+            std::cout << "block : " << cur_blk << " " << prev_blk << std::endl;
+            std::cout << "index : " << cur_cache_index << " " << prev_cache_index << std::endl;
+        }
         assert(cur_cache_index != nblocks && prev_cache_index != nblocks);
 
         wtimer.start_time("walker_update");
@@ -100,7 +105,7 @@ public:
 
         if (hop > 0)
         {
-            walker_t next_walker = walker_makeup(prev_vertex, WALKER_ID(walker), WALKER_SOURCE(walker), cur_vertex, hop);
+            walker_t next_walker = walker_makeup(WALKER_ID(walker), WALKER_SOURCE(walker), prev_vertex, cur_vertex, hop);
             walk_manager->move_walk(next_walker);
             walk_manager->set_max_hop(next_walker);
         }

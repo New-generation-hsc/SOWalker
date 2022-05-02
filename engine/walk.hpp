@@ -105,7 +105,7 @@ public:
     void move_walk(const walker_t &walker)
     {
         tid_t t = static_cast<vid_t>(omp_get_thread_num());
-        bid_t pblk = global_blocks->get_block(WALKER_SOURCE(walker));
+        bid_t pblk = global_blocks->get_block(WALKER_PREVIOUS(walker));
         bid_t cblk = global_blocks->get_block(WALKER_POS(walker));
         bid_t blk = pblk * nblocks + cblk;
         if(block_walks[blk][t].full()) {
@@ -245,7 +245,7 @@ public:
     }
 
     void set_max_hop(const walker_t& walker) {
-        bid_t pblk = global_blocks->get_block(WALKER_SOURCE(walker));
+        bid_t pblk = global_blocks->get_block(WALKER_PREVIOUS(walker));
         bid_t cblk = global_blocks->get_block(WALKER_POS(walker));
         bid_t blk = pblk * nblocks + cblk;
         hid_t hop = WALKER_HOP(walker);
