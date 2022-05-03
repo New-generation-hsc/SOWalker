@@ -506,9 +506,10 @@ real_t calc_block_expect_walk_len(pre_block_t *block, size_t len_limit)
     std::unordered_set<vid_t> tmp_block_vertices;
     std::vector<vid_t> block_vertics(block->nverts);
     std::iota(block_vertics.begin(), block_vertics.end(), block->start_vert);
+    std::vector<real_t> access_wht(block->nverts, 1.0 / block->nverts), bak_access_wht(block->nverts, 0.0);
     size_t len = 1;
 
-    real_t exp_walk_len = 0.0, base = 1.0;
+    real_t exp_walk_len = 1.0, base = 1.0;
     
     while (len <= len_limit) {
         real_t r = 0.0;
@@ -520,21 +521,29 @@ real_t calc_block_expect_walk_len(pre_block_t *block, size_t len_limit)
                 if(block->csr[off] >= block->start_vert && block->csr[off] < block->start_vert + block->nverts) {
                     tmp_block_vertices.insert(block->csr[off]);
                     inner_count++;
+                    bak_access_wht[block->csr[off] - block->start_vert] += access_wht[v_off] / (adj_end - adj_start);
                 }
             }
 
             if(adj_end > adj_start && inner_count > 0) {
-                r += inner_count / (adj_end - adj_start);
+                r += access_wht[v_off] * inner_count / (adj_end - adj_start);
             }
         }
+        base *= r;
         exp_walk_len += len * base;
+        logstream(LOG_DEBUG) << "len :  " << len << ", next step in block prob :  " << r << ", joint prob : " << base << std::endl;
         logstream(LOG_DEBUG) << "cal block expect walk len : " << exp_walk_len << ", tmp_block_vertices size : " << tmp_block_vertices.size() << std::endl;
-        base *= r / block_vertics.size();
         len++;
         
         if(tmp_block_vertices.empty()) break;
         block_vertics = std::vector<vid_t>(tmp_block_vertices.begin(), tmp_block_vertices.end());
         tmp_block_vertices.clear();
+
+        /* calculate the access weight for each vertex */
+        real_t wht_sum = std::accumulate(bak_access_wht.begin(), bak_access_wht.end(), 0.0);
+        for(auto & wht : bak_access_wht) wht /= wht_sum;
+        access_wht = bak_access_wht;
+        std::fill(bak_access_wht.begin(), bak_access_wht.end(), 0.0);
     }
     return exp_walk_len;
 }
@@ -561,7 +570,6 @@ void calc_expected_walk_length(const std::string &filename, int fnum, size_t blo
     pre_block_t block;
     logstream(LOG_INFO) << "start to compute block expected walk length, nblocks = " << nblocks << std::endl;
     std::vector<real_t> block_walk_len(nblocks, 0.0);
-    // std::vector<real_t> block_transit_prob(nblocks * nblocks, 0);
     for (bid_t blk = 0; blk < nblocks; blk++)
     {
         block.nverts = vblocks[blk + 1] - vblocks[blk];
@@ -575,21 +583,6 @@ void calc_expected_walk_length(const std::string &filename, int fnum, size_t blo
         load_block_range(edgedesc, block.csr, block.nedges, block.start_edge * sizeof(vid_t));
 
         logstream(LOG_INFO) << "start computing expected walk length for block = " << blk << std::endl;
-        // std::vector<eid_t> inner_edges(nblocks, 0);
-        // for(eid_t off = 0; off < block.nedges; off++) {
-        //     bid_t vertex_block = get_block(vblocks, block.csr[off]);
-        //     inner_edges[vertex_block]++;
-        // }
-        // real_t rat = (real_t)inner_edges[blk] / (real_t)block.nedges;
-        // real_t base = 1.0, exp_walk_len = 0;
-        // size_t len = 1;
-        // while(len <= len_limit) {
-        //     exp_walk_len += len * base;
-        //     base *= rat;
-        //     len++;
-        // }
-        // block_walk_len[blk] = exp_walk_len;
-        // for(bid_t p = 0; p < nblocks; p++) block_transit_prob[blk * nblocks + p] = (real_t)inner_edges[p] / (real_t)block.nedges;
         block_walk_len[blk] = calc_block_expect_walk_len(&block, len_limit);
         logstream(LOG_INFO) << "finish computing expected walk length for block = " << blk << std::endl;
     }
@@ -600,11 +593,6 @@ void calc_expected_walk_length(const std::string &filename, int fnum, size_t blo
     auto stream = std::fstream(walk_length_name.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
     stream.write(reinterpret_cast<char*>(block_walk_len.data()), sizeof(real_t) * block_walk_len.size());
     stream.close();
-
-    // std::string transit_prob_name = get_transit_prob_name(filename, fnum);
-    // stream = std::fstream(transit_prob_name.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-    // stream.write(reinterpret_cast<char *>(block_transit_prob.data()), sizeof(real_t) * block_transit_prob.size());
-    // stream.close();
 }
 
 #endif

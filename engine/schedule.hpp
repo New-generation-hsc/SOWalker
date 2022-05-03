@@ -8,6 +8,9 @@
 #include <queue>
 #include <random>
 #include <numeric>
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
 
 #include "cache.hpp"
 #include "config.hpp"
@@ -234,12 +237,15 @@ private:
 #endif
 
         if(cache.ncblock < nblocks) {
-            // real_t T = 100.0, alpha = 0.2;
+#ifdef TEMPERATURE_COOLING
+            real_t T = 1000.0, alpha = 0.98;
+#endif
             size_t iter = 0;
             size_t can_comm = 0;
             for(auto blk : candidate_blocks) if(cache_blocks.find(blk) != cache_blocks.end()) can_comm++;
             real_t y_can = cal_score(candidate_blocks) / (cache.ncblock - can_comm);
 
+            std::srand(std::time(nullptr));
             while(iter < max_iter) {
                 std::vector<bid_t> tmp_blocks = candidate_blocks;
                 size_t pos = rand() % (nblocks - cache.ncblock) + cache.ncblock, tmp_pos = rand() % cache.ncblock;
@@ -253,8 +259,22 @@ private:
                     candidate_blocks = tmp_blocks;
                     y_can = y_tmp;
                 } else {
-                    std::swap(tmp_blocks[tmp_pos], block_indexs[pos]);
+#ifdef TEMPERATURE_COOLING
+                    real_t rand_val = static_cast<real_t>(std::rand()) / RAND_MAX;
+                    real_t accept_prob = exp((y_tmp - y_can) / T);
+                    if(y_tmp > 0 && rand_val < accept_prob) {
+                        candidate_blocks = tmp_blocks;
+                        y_can = y_tmp;
+                    }else{
+#endif
+                        std::swap(tmp_blocks[tmp_pos], block_indexs[pos]);
+#ifdef TEMPERATURE_COOLING
+                    }
+#endif
                 }
+#ifdef TEMPERATURE_COOLING
+                T = alpha * T;  // cooling the temperature
+#endif
                 iter++;
             }
         }
