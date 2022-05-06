@@ -93,14 +93,14 @@ int main(int argc, const char *argv[])
     simulated_annealing_scheduler_t walk_scheduler(max_iter, m);
     // navie_graphwalker_scheduler_t walk_scheduler(m);
 
-    auto init_func = [walks, steps](graph_walk *walk_manager)
+    auto init_func = [walks](graph_walk *walk_manager)
     {
         #pragma omp parallel for schedule(static)
         for (vid_t vertex = 0; vertex < walk_manager->nvertices; vertex++)
         {
             wid_t idx = vertex * walks;
             for(wid_t off = 0; off < walks; off++) {
-                walker_t walker = walker_makeup(idx + off, vertex, vertex, vertex, steps);
+                walker_t walker = walker_makeup(idx + off, vertex, vertex, vertex, 0);
                 walk_manager->move_walk(walker);
             }
         }

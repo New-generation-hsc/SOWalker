@@ -175,10 +175,10 @@ private:
         }
 
         std::vector<wid_t> partition_walks(nblocks, 0);
-        for(bid_t p_blk = 0; p_blk < nblocks; p_blk++) {
-            for(bid_t c_blk = 0; c_blk < nblocks; c_blk++) {
-                partition_walks[p_blk] += block_walks[p_blk * nblocks + c_blk];
-                if(p_blk != c_blk) partition_walks[p_blk] += block_walks[c_blk * nblocks + p_blk];
+        for(bid_t c_blk = 0; c_blk < nblocks; c_blk++) {
+            for (bid_t p_blk = 0; p_blk < nblocks; p_blk++) {
+                partition_walks[c_blk] += block_walks[p_blk * nblocks + c_blk];
+                // if(p_blk != c_blk) partition_walks[p_blk] += block_walks[c_blk * nblocks + p_blk];
             }
         }
 

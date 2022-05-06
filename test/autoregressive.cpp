@@ -112,13 +112,13 @@ int main(int argc, const char *argv[])
 
     lp_solver_scheduler_t walk_scheduler(m);
 
-    auto init_func = [walks, steps](graph_walk *walk_manager)
+    auto init_func = [walks](graph_walk *walk_manager)
     {
         #pragma omp parallel for schedule(static)
         for(wid_t off = 0; off < walks; off++)
         {
             vid_t vertex = rand() % walk_manager->nvertices;
-            walker_t walker = walker_makeup(off, vertex, vertex, vertex, steps);
+            walker_t walker = walker_makeup(off, vertex, vertex, vertex, 0);
             walk_manager->move_walk(walker);
         }
     };

@@ -61,7 +61,7 @@ public:
 
         wtimer.start_time("walker_update");
         wid_t run_step = 0;
-        while (cur_cache_index != nblocks && hop > 0)
+        while (cur_cache_index != nblocks && hop < this->_hops)
         {
             cache_block *cur_block = &(cache->cache_blocks[cur_cache_index]);
             cache_block *prev_block = &(cache->cache_blocks[prev_cache_index]);
@@ -90,7 +90,7 @@ public:
             wtimer.stop_time("vertex_sample");
             prev_vertex = cur_vertex;
             cur_vertex = next_vertex;
-            hop--;
+            hop++;
             run_step++;
 
             prev_cache_index = cur_cache_index;
@@ -103,7 +103,7 @@ public:
         }
         wtimer.stop_time("walker_update");
 
-        if (hop > 0)
+        if (hop < this->_hops)
         {
             walker_t next_walker = walker_makeup(WALKER_ID(walker), WALKER_SOURCE(walker), prev_vertex, cur_vertex, hop);
             walk_manager->move_walk(next_walker);

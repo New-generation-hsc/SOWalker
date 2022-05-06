@@ -34,3 +34,16 @@ make cc
 sudo make install_cc
 echo "export LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH:/home/hsc/or-tools/lib/\"" >> .bashrc
 ```
+
+# [Option] Install Cmake
+
+```
+wget https://github.com/Kitware/CMake/releases/download/v3.23.1/cmake-3.23.1.tar.gz
+tar zxvf cmake-3.23.1.tar.gz
+cd cmake-3.23.1/
+./bootstrap
+make      
+sudo  make install
+```
+
+- [Option] Install Openssl: `sudo apt-get install libssl-dev`
