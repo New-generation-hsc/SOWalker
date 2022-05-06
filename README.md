@@ -21,3 +21,16 @@ The `run` commnd
 ```bash
 ./bin/test/node2vec /home/hsc/dataset/livejournal/w-soc-livejournal.txt sample reject length 20 walkpersource 1
 ```
+
+# Install OR-tools
+
+- ortools : https://developers.google.com/optimization/install/cpp/source_linux
+
+```bash
+sudo apt-get -y install git wget pkg-config build-essential cmake autoconf libtool zlib1g-dev lsb-release
+git clone https://github.com/google/or-tools
+cd ortools && make third_party
+make cc
+sudo make install_cc
+echo "export LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH:/home/hsc/or-tools/lib/\"" >> .bashrc
+```
