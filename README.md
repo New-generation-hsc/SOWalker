@@ -32,7 +32,8 @@ git clone https://github.com/google/or-tools
 cd or-tools && make third_party
 make cc
 sudo make install_cc
-echo "export LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH:/home/hsc/or-tools/lib/\"" >> .bashrc
+echo "export LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH:/home/hsc/or-tools/lib/\"" >> ~/.bashrc
+source ~/.bashrc
 ```
 
 # [Option] Install Cmake

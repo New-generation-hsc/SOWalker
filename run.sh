@@ -71,5 +71,5 @@ RM28_DATASET="/home/hsc/graphdataset/rmat28/rmat28.txt"
 #     done
 # done
 
-./bin/test/node2vec $SL_DATASET sample reject length 20 walkpersource 1
+./bin/test/node2vec $TW_DATASET sample reject length 20 walkpersource 1
 # ./bin/test/autoregressive $SL_DATASET sample its length 20 walksource 1000000

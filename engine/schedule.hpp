@@ -151,8 +151,7 @@ public:
 };
 
 /**
- * The following scheduler is the surfer scheduler
- * the scheduler selects one block at first, if the total walks is less than 1000, then choose two blocks
+ * 
  */
 class simulated_annealing_scheduler_t : public scheduler
 {
@@ -301,12 +300,14 @@ private:
         }
 
         for(auto blk : bucket_uncached) {
-            if(cache.cache_blocks[pos].block != NULL) {
-                cache.cache_blocks[pos].block->cache_index = nblocks;
+            if(partition_walks[blk] > 0) {
+                if(cache.cache_blocks[pos].block != NULL) {
+                    cache.cache_blocks[pos].block->cache_index = nblocks;
+                }
+                std::cout << "load block info, blk = " << blk << " to " << pos << std::endl;
+                driver.load_block_info(cache, walk_manager.global_blocks, pos, blk);
+                pos++;
             }
-            std::cout << "load block info, blk = " << blk << " to " << pos << std::endl;
-            driver.load_block_info(cache, walk_manager.global_blocks, pos, blk);
-            pos++;
         }
 
         std::cout << "bucket sequence : ";
@@ -363,6 +364,15 @@ private:
         for (bid_t blk = 0; blk < nblocks * nblocks; blk++)
         {
             block_walks[blk] = walk_manager.nblockwalks(blk);
+        }
+
+        std::vector<wid_t> partition_walks(nblocks, 0);
+        for (bid_t p_blk = 0; p_blk < nblocks; p_blk++)
+        {
+            for (bid_t c_blk = 0; c_blk < nblocks; c_blk++)
+            {
+                partition_walks[c_blk] += block_walks[p_blk * nblocks + c_blk];
+            }
         }
 
         std::vector<Edge_t> edges;
@@ -449,17 +459,7 @@ private:
         }
         else
         {
-            logstream(LOG_DEBUG) << "using simulated_annealing to solve partition scheduling" << std::endl;
-            std::vector<wid_t> partition_walks(nblocks, 0);
-            for (bid_t p_blk = 0; p_blk < nblocks; p_blk++)
-            {
-                for (bid_t c_blk = 0; c_blk < nblocks; c_blk++)
-                {
-                    partition_walks[p_blk] += block_walks[p_blk * nblocks + c_blk];
-                    if (p_blk != c_blk)
-                        partition_walks[p_blk] += block_walks[c_blk * nblocks + p_blk];
-                }
-            }
+            logstream(LOG_DEBUG) << "using greedy algorithm to solve partition scheduling" << std::endl;
 
 #ifdef EXPECT_SCHEDULE
             auto cmp = [&partition_walks, &walk_manager](bid_t u, bid_t v)
@@ -523,13 +523,16 @@ private:
 
         for (auto blk : bucket_uncached)
         {
-            if (cache.cache_blocks[pos].block != NULL)
+            if (partition_walks[blk] > 0)
             {
-                cache.cache_blocks[pos].block->cache_index = nblocks;
+                if (cache.cache_blocks[pos].block != NULL)
+                {
+                    cache.cache_blocks[pos].block->cache_index = nblocks;
+                }
+                std::cout << "load block info, blk = " << blk << " -> cache_index = " << pos << std::endl;
+                driver.load_block_info(cache, walk_manager.global_blocks, pos, blk);
+                pos++;
             }
-            // std::cout << "load block info, blk = " << blk << " -> cache_index = " << pos << std::endl;
-            driver.load_block_info(cache, walk_manager.global_blocks, pos, blk);
-            pos++;
         }
 
         std::cout << "bucket sequence : ";
@@ -555,9 +558,9 @@ public:
 
     bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
     {
-        _m.start_time("simulated_annealing_scheduler_swap_blocks");
+        _m.start_time("lp_solver_scheduler_swap_blocks");
         choose_blocks(cache, driver, walk_manager);
-        _m.stop_time("simulated_annealing_scheduler_swap_blocks");
+        _m.stop_time("lp_solver_scheduler_swap_blocks");
         return 0;
     }
 };
