@@ -23,6 +23,7 @@ public:
 class graph_walk {
 public:
     std::string base_name;  /* the dataset base name, indicate the walks store path */
+    size_t blocksize;
     vid_t nvertices;
     bid_t nblocks, totblocks;
     tid_t nthreads;
@@ -39,6 +40,7 @@ public:
         base_name = conf.base_name;
         nvertices = conf.nvertices;
         nthreads = conf.nthreads;
+        blocksize = conf.blocksize;
         global_driver = &driver;
         global_blocks = &blocks;
         nblocks = global_blocks->nblocks;
@@ -74,7 +76,7 @@ public:
 
         for (bid_t blk = 0; blk < totblocks; blk++)
         {
-            std::string walk_name = get_walk_name(base_name, blk);
+            std::string walk_name = get_walk_name(base_name, blocksize, blk);
             if(test_exists(walk_name)) unlink(walk_name.c_str());
         }
 
@@ -94,7 +96,7 @@ public:
 
         for (bid_t blk = 0; blk < totblocks; blk++)
         {
-            std::string walk_name = get_walk_name(base_name, blk);
+            std::string walk_name = get_walk_name(base_name, blocksize, blk);
             if(test_exists(walk_name)) unlink(walk_name.c_str());
         }
         walks.destroy();
@@ -121,7 +123,7 @@ public:
     {
         block_ndwalk[blk][t] += block_walks[blk][t].size();
         block_nmwalk[blk][t] -= block_walks[blk][t].size();
-        appendfile(get_walk_name(base_name, blk), block_walks[blk][t].buffer_begin(), block_walks[blk][t].size());
+        appendfile(get_walk_name(base_name, blocksize, blk), block_walks[blk][t].buffer_begin(), block_walks[blk][t].size());
         block_walks[blk][t].clear();
     }
 
@@ -203,7 +205,7 @@ public:
 
     size_t load_disk_walks(bid_t exec_block, wid_t walk_cnt, wid_t loaded_walks) {
         walks.clear();
-        block_desc_manager_t block_desc(get_walk_name(base_name, exec_block));
+        block_desc_manager_t block_desc(get_walk_name(base_name, blocksize, exec_block));
         global_driver->load_walk(block_desc.get_desc(), walk_cnt, loaded_walks, walks);
         return walks.size();
     }
@@ -211,7 +213,7 @@ public:
     void dump_walks(bid_t exec_block)
     {
         std::fill(block_ndwalk[exec_block].begin(), block_ndwalk[exec_block].end(), 0);
-        block_desc_manager_t block_desc(get_walk_name(base_name, exec_block));
+        block_desc_manager_t block_desc(get_walk_name(base_name, blocksize, exec_block));
         ftruncate(block_desc.get_desc(), 0);
 
         global_blocks->reset_rank(exec_block % nblocks);

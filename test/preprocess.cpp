@@ -10,7 +10,8 @@ int main(int argc, const char* argv[]) {
     bool weighted = get_option_bool("weighted");
     bool sorted   = get_option_bool("sorted");
     graph_converter converter(remove_extension(input), weighted, sorted);
-    convert(input, converter);
+    auto query_blocksize = [](vid_t nvertices){return BLOCK_SIZE;};
+    convert(input, converter, query_blocksize);
     logstream(LOG_INFO) << "  ================= FINISHED ======================  " << std::endl;
     return 0;
 }

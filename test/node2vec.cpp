@@ -13,20 +13,19 @@
 #include "metrics/metrics.hpp"
 #include "metrics/reporter.hpp"
 #include "apps/secondorder.hpp"
+#include "preprocess/graph_converter.hpp"
 
 int main(int argc, const char *argv[])
 {
     assert(argc >= 2);
     set_argc(argc, argv);
     logstream(LOG_INFO) << "app : " << argv[0] << ", dataset : " << argv[1] << std::endl;
-    std::string input = remove_extension(argv[1]);
-    std::string base_name = randgraph_output_filename(get_path_name(input), get_file_name(input), BLOCK_SIZE);
-
-    /* graph meta info */
-    vid_t nvertices;
-    eid_t nedges;
+    std::string input = argv[1];
     bool weighted = get_option_bool("weighted");
-    bool reordered = get_option_bool("reordered");
+    bool sorted   = get_option_bool("sorted");
+    bool skip     = get_option_bool("skip"); // use to skip the interactive convert query
+    size_t blocksize = get_option_long("blocksize", BLOCK_SIZE);
+    size_t dynamic   = get_option_bool("dynamic"); // the blocksize is dynamic, according to the number of walks
     size_t cache_size = get_option_int("cache", MEMORY_CACHE / (1024LL * 1024 * 1024));
     size_t max_iter = get_option_int("iter", 30);
     wid_t walks = (wid_t)get_option_int("walkpersource", 1);
@@ -34,18 +33,41 @@ int main(int argc, const char *argv[])
     real_t p = (real_t)get_option_float("p", 0.5);
     real_t q = (real_t)get_option_float("q", 2.0);
 
+    auto static_query_blocksize = [blocksize](vid_t nvertices) { return blocksize; };
+    auto dynamic_query_blocksize = [&blocksize, walks](vid_t nvertices) {
+        wid_t nwalks = 1LL * walks * nvertices;
+        int dom = 0;
+        while(nwalks){
+            dom++;
+            nwalks /= 10;
+        }
+
+        blocksize= 1LL * pow(2, 11 + dom) * 1024;
+        logstream(LOG_INFO) << "determined blocksize = " << blocksize / (1024 * 1024) << "MB." << std::endl;
+        return blocksize; 
+    };
+
+    std::function<size_t(vid_t nvertices)> query_blocksize;
+    if(dynamic) query_blocksize = dynamic_query_blocksize;
+    else query_blocksize = static_query_blocksize;
+
+    graph_converter converter(remove_extension(argv[1]), weighted, sorted);
+    convert(input, converter, query_blocksize, skip);
+    std::string base_name = remove_extension(argv[1]);
+
+    /* graph meta info */
+    vid_t nvertices;
+    eid_t nedges;
     load_graph_meta(base_name, &nvertices, &nedges, weighted);
 
     graph_config conf = {
         base_name,
-        0,
         cache_size * 1024LL * 1024 * 1024,
-        BLOCK_SIZE,
+        blocksize,
         (tid_t)omp_get_max_threads(),
         nvertices,
         nedges,
-        weighted,
-        reordered
+        weighted
     };
 
     graph_block blocks(&conf);

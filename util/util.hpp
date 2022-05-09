@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <cstdio>
+#include <cmath>
 #include "logger/logger.hpp"
 
 // for windows mkdir
@@ -57,83 +58,14 @@ std::string remove_extension(std::string const & filename) {
     return p>0&&p!=std::string::npos ? filename.substr(0, p) : filename;
 }
 
-inline std::string get_beg_pos_name(std::string const & base_name, int fnum, bool reordered=false) {
-    std::string ans = concatnate_name(base_name, fnum) + ".beg";
-    if(reordered) ans += ".ro";
-    return ans;
-}
-
-inline std::string get_csr_name(std::string const & base_name, int fnum, bool reordered=false) {
-    std::string ans = concatnate_name(base_name, fnum) + ".csr";
-    if(reordered) ans += ".ro";
-    return ans;
-}
-
-inline std::string get_degree_name(std::string const & base_name, int fnum) {
-    return concatnate_name(base_name, fnum) + ".deg";
-}
-
-inline std::string get_weights_name(std::string const & base_name, int fnum) {
-    return concatnate_name(base_name, fnum) + ".wht";
-}
-
-inline std::string get_prob_name(std::string const & base_name, int fnum) {
-    return concatnate_name(base_name, fnum) + ".pb";
-}
-
-inline std::string get_alias_name(std::string const & base_name, int fnum) {
-    return concatnate_name(base_name, fnum) + ".as";
-}
-
-inline std::string get_accumulate_name(std::string const & base_name, int fnum) {
-    return concatnate_name(base_name, fnum) + ".acc";
-}
-
-inline std::string get_bloomfilter_name(std::string const & base_name, int fnum) {
-    return concatnate_name(base_name, fnum) + ".bf";
-}
-
-inline std::string get_expected_walk_length_name(std::string const & base_name, int fnum) {
-    return concatnate_name(base_name, fnum) + ".exp";
-}
-
-inline std::string get_transit_prob_name(std::string const & base_name, int fnum) {
-    return concatnate_name(base_name, fnum) + ".tp";
-}
-
-inline std::string get_vert_blocks_name(std::string const &base_name, size_t blocksize, bool reordered=false)
-{
-    std::string ans = concatnate_name(base_name, blocksize / (1024 * 1024)) + "MB.vert.blocks";
-    if(reordered) ans += ".ro";
-    return ans;
-}
-
-inline std::string get_edge_blocks_name(std::string const & base_name, size_t blocksize, bool reordered=false) {
-    std::string ans = concatnate_name(base_name, blocksize / (1024 * 1024)) + "MB.edge.blocks";
-    if(reordered) ans += ".ro";
-    return ans;
-}
-
-inline std::string get_ratio_name(std::string const & base_name, int fnum) {
-    return concatnate_name(base_name, fnum) + ".rat";
-}
-
-inline std::string get_walk_name(std::string const & base_name, bid_t blk) {
-    return concatnate_name(base_name, blk) + ".walk";
-}
-
-inline std::string get_meta_name(std::string const & base_name) {
-    return base_name + ".meta";
-}
-
 /** test a file existence */
-inline bool test_exists(const std::string & filename) {
+bool test_exists(const std::string & filename) {
     struct stat buffer;
     return (stat(filename.c_str(), &buffer) == 0);
 }
 
 /** test a file existence and if the file exist then delete it */
-inline bool test_delete(const std::string & filename) {
+bool test_delete(const std::string & filename) {
     if(test_exists(filename)) {
         std::remove(filename.c_str());
         return true;
@@ -170,7 +102,7 @@ std::string get_file_name(const std::string& s) {
     return s;
 }
 
-int randgraph_mkdir(const char* path) {
+int sowalker_mkdir(const char* path) {
 #ifdef _WIN32
     return ::_mkdir(path);
 #else
@@ -184,14 +116,92 @@ bool test_folder_exists(const std::string& folder_name) {
     return ret == 0 && (st.st_mode & S_IFDIR);
 }
 
-std::string randgraph_output_folder(const std::string& folder, size_t blocksize) {
-    std::string output = folder + concatnate_name("randgraph", blocksize / (1024 * 1024));
-    return output;
+/**
+ * @brief 
+ * @param base_name the base_name is the dataset_path removes extension
+ */
+inline std::string get_beg_pos_name(std::string const &base_name) {
+    return base_name + ".beg";
 }
 
-std::string randgraph_output_filename(const std::string& folder, const std::string& dataset_name, size_t blocksize) {
-    std::string output_filename = randgraph_output_folder(folder, blocksize) + "/" + dataset_name;
-    return output_filename;
+inline std::string get_csr_name(std::string const & base_name) {
+    return base_name + ".csr";
+}
+
+inline std::string get_weights_name(std::string const & base_name) {
+    return base_name + ".wht";
+}
+
+inline std::string get_meta_name(std::string const & base_name) {
+    return base_name + ".meta";
+}
+
+std::string get_dataset_block_folder(std::string const& base_name, size_t blocksize) {
+    std::string folder = get_path_name(base_name);
+    folder += concatnate_name("sowalker", blocksize / (1024 * 1024));
+    return folder;
+}
+
+std::string get_vert_blocks_name(std::string const &base_name, size_t blocksize)
+{
+    std::string folder = get_dataset_block_folder(base_name, blocksize), dataset_name = get_file_name(base_name);
+    dataset_name = concatnate_name(dataset_name, blocksize / (1024 * 1024)) + "MB.vert.blocks";
+    return folder + "/" + dataset_name;
+}
+
+std::string get_edge_blocks_name(std::string const & base_name, size_t blocksize) {
+    std::string folder = get_dataset_block_folder(base_name, blocksize), dataset_name = get_file_name(base_name);
+    dataset_name = concatnate_name(dataset_name, blocksize / (1024 * 1024)) + "MB.edge.blocks";
+    return folder + "/" + dataset_name;
+}
+
+std::string get_walk_name(std::string const &base_name, size_t blocksize, bid_t blk)
+{
+    std::string folder = get_dataset_block_folder(base_name, blocksize);
+    std::string walk_name = std::to_string(blk) + ".walk";
+    return folder + "/" + walk_name;
+}
+
+std::string get_expected_walk_length_name(std::string const & base_name, size_t blocksize) {
+    std::string folder = get_dataset_block_folder(base_name, blocksize), dataset_name = get_file_name(base_name);
+    dataset_name += ".exp";
+    return folder + "/" + dataset_name;
+}
+
+bool test_dataset_processed_exists(std::string const &base_name) {
+    std::string beg_pos_name = get_beg_pos_name(base_name);
+    std::string csr_name = get_csr_name(base_name);
+    std::string meta_name = get_meta_name(base_name);
+
+    return test_exists(beg_pos_name) && test_exists(csr_name) && test_exists(meta_name);
+}
+
+void delete_processed_dataset(std::string const &base_name) {
+    std::string beg_pos_name = get_beg_pos_name(base_name);
+    std::string csr_name = get_csr_name(base_name);
+    std::string meta_name = get_meta_name(base_name);
+
+    test_delete(beg_pos_name);
+    test_delete(csr_name);
+    test_delete(meta_name);
+}
+
+bool test_dataset_block_data_exists(std::string const & base_name, size_t blocksize) {
+    std::string vert_block_name = get_vert_blocks_name(base_name, blocksize);
+    std::string edge_block_name = get_edge_blocks_name(base_name, blocksize);
+    std::string exp_block_name = get_expected_walk_length_name(base_name, blocksize);
+
+    return test_exists(vert_block_name) && test_exists(edge_block_name) && test_exists(exp_block_name);
+}
+
+void delete_processed_block_data(std::string const & base_name, size_t blocksize) {
+    std::string vert_block_name = get_vert_blocks_name(base_name, blocksize);
+    std::string edge_block_name = get_edge_blocks_name(base_name, blocksize);
+    std::string exp_block_name  = get_expected_walk_length_name(base_name, blocksize);
+
+    test_delete(vert_block_name);
+    test_delete(edge_block_name);
+    test_delete(exp_block_name);
 }
 
 #endif

@@ -11,7 +11,6 @@
 
 struct graph_config {
     std::string base_name;
-    int fnum;
     size_t cache_size;
     size_t blocksize;
     tid_t nthreads;
@@ -19,7 +18,6 @@ struct graph_config {
     vid_t nvertices;
     eid_t nedges;
     bool is_weighted;
-    bool reordered;
 };
 
 #endif

@@ -31,8 +31,8 @@ public:
     void setup(graph_config *conf) {
         this->destory();
 
-        std::string beg_pos_name = get_beg_pos_name(conf->base_name, conf->fnum, conf->reordered);
-        std::string csr_name = get_csr_name(conf->base_name, conf->fnum, conf->reordered);
+        std::string beg_pos_name = get_beg_pos_name(conf->base_name);
+        std::string csr_name = get_csr_name(conf->base_name);
         logstream(LOG_DEBUG) << "load beg_pos_name : " << beg_pos_name << ", csr_name : " << csr_name << std::endl;
 
         vertdesc = open(beg_pos_name.c_str(), O_RDONLY);
@@ -41,7 +41,7 @@ public:
 
         if (_weighted)
         {
-            std::string weight_name = get_weights_name(conf->base_name, conf->fnum);
+            std::string weight_name = get_weights_name(conf->base_name);
             if(test_exists(weight_name)) whtdesc = open(weight_name.c_str(), O_RDONLY);
         }
     }

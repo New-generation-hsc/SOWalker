@@ -29,7 +29,7 @@ std::vector<T> load_graph_blocks(std::string name) {
 void load_graph_meta(std::string base_name, vid_t *nvertices, eid_t *nedges, bool is_weighted) {
     if(is_weighted) {
         //TODO; this place exists some bug
-        std::string edge_weight_path = get_weights_name(base_name, 0);
+        std::string edge_weight_path = get_weights_name(base_name);
         bool is_weight_exist = test_exists(edge_weight_path);
         ASSERT(is_weight_exist, "If the graph is weighted, then preprocessed weighted file must exist.");
     }

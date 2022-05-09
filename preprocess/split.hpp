@@ -15,7 +15,7 @@
 /*  This code has some bugs, I will fix them in a few days                      */
 /** =========================================================================== */
 /** split the beg_pos into multiple blocks, each block max size is BLOCKSIZE */
-size_t split_blocks(const std::string& filename, int fnum, size_t block_size, bool reordered = false) {
+size_t split_blocks(const std::string& base_name, int fnum, size_t block_size) {
     eid_t max_nedges = (eid_t)block_size / sizeof(vid_t);
     logstream(LOG_INFO) << "start split blocks, blocksize = " << block_size / (1024 * 1024) << "MB, max_nedges = " << max_nedges << std::endl;
 
@@ -27,7 +27,7 @@ size_t split_blocks(const std::string& filename, int fnum, size_t block_size, bo
     vblocks.push_back(cur_pos);
     eblocks.push_back(rd_edges);
 
-    std::string name = get_beg_pos_name(filename, fnum, reordered);
+    std::string name = get_beg_pos_name(base_name);
     int fd = open(name.c_str(), O_RDONLY);
     assert(fd >= 0);
     vid_t nvertices = lseek(fd, 0, SEEK_END) / sizeof(eid_t);
@@ -59,23 +59,16 @@ size_t split_blocks(const std::string& filename, int fnum, size_t block_size, bo
     eblocks.push_back(rd_edges);
 
     /** write the vertex split points into vertex block file */
-    std::string vblockfile = get_vert_blocks_name(filename, block_size, reordered);
+    std::string vblockfile = get_vert_blocks_name(base_name, block_size);
     auto vblf = std::fstream(vblockfile.c_str(), std::ios::out | std::ios::binary);
     vblf.write((char*)&vblocks[0], vblocks.size() * sizeof(vid_t));
     vblf.close();
 
     /** write the edge split points into edge block file */
-    std::string eblockfile = get_edge_blocks_name(filename, block_size, reordered);
+    std::string eblockfile = get_edge_blocks_name(base_name, block_size);
     auto eblf = std::fstream(eblockfile.c_str(), std::ios::out | std::ios::binary);
     eblf.write((char*)&eblocks[0], eblocks.size() * sizeof(eid_t));
     eblf.close();
-
-    /** write the graph meta data into meta file */
-    std::string metafile = get_meta_name(filename);
-    auto metastream = std::fstream(metafile.c_str(), std::ios::out | std::ios::binary);
-    metastream.write((char*)&vblocks.back(), sizeof(vid_t));
-    metastream.write((char*)&eblocks.back(), sizeof(eid_t));
-    metastream.close();
 
     return vblocks.size() - 1;
 }

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <functional>
 #include "api/graph_buffer.hpp"
 #include "api/constants.hpp"
 #include "api/types.hpp"
@@ -60,40 +61,24 @@ private:
     eid_t rd_edges;
     eid_t csr_pos;
 
-    std::string output_filename;
+    std::string base_name;
 
     void setup_output(const std::string& input) {
-        std::string folder = randgraph_output_folder(get_path_name(input), BLOCK_SIZE);
-        if(!test_folder_exists(folder)) randgraph_mkdir(folder.c_str());
-        output_filename = randgraph_output_filename(get_path_name(input), get_file_name(input), BLOCK_SIZE);
+        base_name = input;
     }
 
     void setup_output(const std::string& path, const std::string& dataset) {
-        std::string folder = randgraph_output_folder(path, BLOCK_SIZE);
-        if(!test_folder_exists(folder)) randgraph_mkdir(folder.c_str());
-        output_filename = randgraph_output_filename(path, dataset, BLOCK_SIZE);
+        base_name = path + dataset;
     }
 
     void flush_beg_pos() {
-        std::string name = get_beg_pos_name(output_filename, fnum);
+        std::string name = get_beg_pos_name(base_name);
         appendfile(name, beg_pos.buffer_begin(), beg_pos.size());
         beg_pos.clear();
     }
 
-    void flush_degree() {
-        std::string name = get_degree_name(output_filename, fnum);
-        appendfile(name, deg.buffer_begin(), deg.size());
-        buf_vstart += deg.size();
-        deg.clear();
-    }
-
     void flush_csr() {
-        // eid_t max_nedges = (eid_t)FILE_SIZE / sizeof(vid_t);
-        // if(rd_edges + csr.size() > max_nedges) {
-        //     fnum += 1;
-        //     rd_edges = 0;
-        // }
-        std::string name = get_csr_name(output_filename, fnum);
+        std::string name = get_csr_name(base_name);
         appendfile(name, csr.buffer_begin(), csr.size());
         rd_edges += csr.size();
         buf_estart += csr.size();
@@ -101,7 +86,7 @@ private:
     }
 
     void flush_weights() {
-        std::string name = get_weights_name(output_filename, fnum);
+        std::string name = get_weights_name(base_name);
         appendfile(name, weights.buffer_begin(), weights.size());
         weights.clear();
     }
@@ -210,7 +195,6 @@ public:
         logstream(LOG_INFO) << "Buffer : [ " << buf_vstart << ", " <<  buf_vstart + deg.size() << " ), csr position : [ " << buf_estart << ", " << csr_pos << " )" << std::endl;
         if(!csr.empty()) flush_csr();
         if(!beg_pos.empty()) flush_beg_pos();
-        if(!deg.empty()) flush_degree();
         if(_weighted && !weights.empty()) flush_weights();
     }
 
@@ -219,120 +203,125 @@ public:
         if(max_vert > curr_vert) sync_zeros(max_vert - curr_vert);
         flush_buffer();
 
+        /** write the graph meta data into meta file */
+        std::string metafile = get_meta_name(base_name);
+        auto metastream = std::fstream(metafile.c_str(), std::ios::out | std::ios::binary);
+        vid_t nvertices = max_vert + 1;
+        eid_t nedges = csr_pos;
+        metastream.write((char *)&nvertices, sizeof(vid_t));
+        metastream.write((char *)&nedges, sizeof(eid_t));
+        metastream.close();
+
         logstream(LOG_INFO) << "nvertices = " << max_vert + 1 << ", nedges = " << csr_pos << ", files : " << fnum + 1 << std::endl;
     }
 
     int get_fnum() { return this->fnum + 1; }
-    std::string get_output_filename() const { return output_filename; }
+    std::string get_output_filename() const { return base_name; }
     bool is_weighted() const { return _weighted; }
+
+    vid_t get_nvertices() { return this->max_vert + 1; }
 
     bool need_sorted() const { return _sorted; }
 };
 
-void convert(std::string filename, graph_converter &converter, size_t blocksize = BLOCK_SIZE) {
+void convert(std::string filename, graph_converter &converter, std::function<size_t(vid_t nvertices)> query_blocksize, bool skip = false) {
 
-    FILE *fp = fopen(filename.c_str(), "r");
-    assert(fp != NULL);
-
-    converter.initialize();
-    char line[1024];
-    while(fgets(line, 1024, fp) != NULL) {
-        if(line[0] == '#') continue;
-        if(line[0] == '%') continue;
-
-        char *t1, *t2, *t3;
-        t1 = strtok(line, "\t, ");
-        t2 = strtok(NULL, "\t, ");
-        t3 = strtok(NULL, "\t, ");
-        if(t1 == NULL || t2 == NULL) {
-            logstream(LOG_ERROR) << "Input file is not the right format. Expected <from> <to>" << std::endl;
-            assert(false);
-        }
-        vid_t from = atoi(t1);
-        vid_t to = atoi(t2);
-        if(from == to) continue;
-        if(converter.is_weighted()) {
-            assert(t3 != NULL);
-            real_t w = static_cast<real_t>(atof(t3));
-            converter.convert(from, to, &w);
-        }else {
-            converter.convert(from, to, NULL);
+    std::string base_name = remove_extension(filename);
+    bool reprocessed = true;
+    if(test_dataset_processed_exists(base_name)) {
+        if(skip) {
+            reprocessed = false;
+        } else {
+            logstream(LOG_INFO) << "Find preprocessed data, do you want to reprocessed(y/n)?" << std::endl;
+            std::string val;
+            std::cin >> val;
+            if (!val.empty() && (val[0] == 'n' || val[0] == 'N')) reprocessed = false;
         }
     }
-    converter.finalize();
 
-    /* split the data into multiple blocks */
-    split_blocks(converter.get_output_filename(), 0, blocksize, false);
+    if (reprocessed) {
+        delete_processed_dataset(base_name);
+        FILE *fp = fopen(filename.c_str(), "r");
+        assert(fp != NULL);
 
-    if(converter.need_sorted()) {
-        sort_vertex_neighbors(converter.get_output_filename(), 0, blocksize, converter.is_weighted());
-    }
+        logstream(LOG_INFO) << "start to convert the " << filename << std::endl;
+        converter.initialize();
+        char line[1024];
+        size_t rdlines = 0;
+        while (fgets(line, 1024, fp) != NULL)
+        {
+            if (line[0] == '#')
+                continue;
+            if (line[0] == '%')
+                continue;
 
-    /* if the graph is weighted, then preprocess the alias table. */
-    if(converter.is_weighted()) {
-        second_order_precompute(converter.get_output_filename(), 0, blocksize);
-    }
-
-    /* make bloom filter for each block */
-    // make_graph_bloom_filter(converter.get_output_filename(), 0, blocksize, false);
-
-    /* make the expected walk length */
-    calc_expected_walk_length(converter.get_output_filename(), 0, blocksize, 10);
-}
-
-/** compute the given graph each vertex point to the same block ratio */
-void compute_graph_degree_ratio(const std::string& filename, int fnum, size_t blocksize = BLOCK_SIZE) {
-    std::string vert_block_name = get_vert_blocks_name(filename, blocksize);
-    std::string edge_block_name = get_edge_blocks_name(filename, blocksize);
-    std::string degree_name     = get_degree_name(filename, fnum);
-    std::string csr_name        = get_csr_name(filename, fnum);
-    std::string output          = get_ratio_name(filename, fnum);
-
-    std::vector<vid_t> vblocks = load_graph_blocks<vid_t>(vert_block_name);
-    std::vector<eid_t> eblocks = load_graph_blocks<eid_t>(edge_block_name);
-
-    int vertdesc = open(degree_name.c_str(), O_RDONLY);
-    int edgedesc = open(csr_name.c_str(), O_RDONLY);
-    assert(vertdesc > 0 && edgedesc > 0);
-
-    bid_t nblocks = vblocks.size() - 1;
-    logstream(LOG_INFO) << "load vblocks and eblocks successfully, block count : " << nblocks << std::endl;
-    vid_t *degree = NULL, *csr = NULL;
-    float *ratio = NULL;
-    for(bid_t blk = 0; blk < nblocks; blk++) {
-        vid_t nverts = vblocks[blk+1] - vblocks[blk];
-        eid_t nedges = eblocks[blk+1] - eblocks[blk];
-
-        degree = (vid_t*)realloc(degree, nverts * sizeof(vid_t));
-        ratio  = (float *)realloc(ratio, nverts * sizeof(float));
-        for(vid_t v = 0; v < nverts; v++) ratio[v] = 0.0;
-        csr    = (vid_t*)realloc(csr, nedges * sizeof(vid_t));
-        assert(degree != NULL && ratio != NULL && csr != NULL);
-        logstream(LOG_INFO) << "start load block " << blk << ", vert range : [ " << vblocks[blk] << ", " << vblocks[blk+1] << " ), edge range : [ " << eblocks[blk] << ", " << eblocks[blk+1] << " )" << std::endl;
-        load_block_range(vertdesc, degree, nverts, vblocks[blk] * sizeof(vid_t));
-        load_block_range(edgedesc, csr,    nedges, eblocks[blk] * sizeof(vid_t));
-
-        eid_t edge_pos = 0;
-        for(vid_t v = 0; v < nverts; v++) {
-            if(degree[v] == 0) continue;
-            float sum = 0.0;
-            vid_t deg = degree[v];
-            assert(edge_pos + deg <= nedges);
-            for(eid_t e = edge_pos; e < edge_pos + deg; e++) {
-                bid_t dst = get_block(vblocks, csr[e]);
-                if(dst == blk) sum += 1.0 / (float)deg;
+            char *t1, *t2, *t3;
+            rdlines++;
+            t1 = strtok(line, "\t, ");
+            t2 = strtok(NULL, "\t, ");
+            t3 = strtok(NULL, "\t, ");
+            if (t1 == NULL || t2 == NULL)
+            {
+                logstream(LOG_ERROR) << "Input file is not the right format. Expected <from> <to>" << std::endl;
+                assert(false);
             }
-            ratio[v] = sum;
-            edge_pos += deg;
+            vid_t from = atoi(t1);
+            vid_t to = atoi(t2);
+            if (from == to)
+                continue;
+            if (converter.is_weighted())
+            {
+                assert(t3 != NULL);
+                real_t w = static_cast<real_t>(atof(t3));
+                converter.convert(from, to, &w);
+            }
+            else
+            {
+                converter.convert(from, to, NULL);
+            }
+            if(rdlines % 1000000 == 0) {
+                logstream(LOG_INFO) << "readlines : " << rdlines << std::endl;
+            }
         }
-        assert(edge_pos == nedges);
-        appendfile(output,ratio, nverts);
+        converter.finalize();
+        logstream(LOG_INFO) << "finish to convert the " << filename << std::endl;
     }
 
-    /** free the allocate memory */
-    if(degree) free(degree);
-    if(csr)    free(csr);
-    if(ratio)  free(ratio);
+    vid_t nvertices;
+    eid_t nedges;
+    load_graph_meta(base_name, &nvertices, &nedges, false);
+    size_t blocksize = query_blocksize(nvertices);
+    
+    std::string folder = get_dataset_block_folder(base_name, blocksize);
+    if(!test_folder_exists(folder)) {
+        sowalker_mkdir(folder.c_str());
+    }
+
+    bool block_data_exist = test_dataset_block_data_exists(base_name,  blocksize);
+    bool regenerate = true;
+    if(!reprocessed && block_data_exist) {
+        if(skip) {
+            regenerate = false;
+        } else {
+            logstream(LOG_INFO) << "Find preprocessed block data (edge.block, vert.block, exp), do you want to regenerate(y/n)?" << std::endl;
+            std::string val;
+            std::cin >> val;
+            if (!val.empty() && (val[0] == 'n' || val[0] == 'N')) regenerate = false;
+        }
+    }
+
+    if(reprocessed || regenerate) {
+        delete_processed_block_data(base_name, blocksize);
+        /* split the data into multiple blocks */
+        split_blocks(base_name, 0, blocksize);
+
+        if(converter.need_sorted()) {
+            sort_vertex_neighbors(base_name, blocksize, converter.is_weighted());
+        }
+
+        /* make the expected walk length */
+        calc_expected_walk_length(base_name, blocksize, 10);
+    }
 }
 
 #endif
