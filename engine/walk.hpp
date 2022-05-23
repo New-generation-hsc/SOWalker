@@ -47,8 +47,7 @@ public:
 
         totblocks = nblocks * nblocks;
         maxhops.resize(totblocks, 0);
-
-        walks.alloc(nthreads * MAX_TWALKS);
+        walks.alloc(conf.max_nthreads * MAX_TWALKS);
 
         block_nmwalk.resize(totblocks);
         for (bid_t blk = 0; blk < totblocks; blk++)
@@ -182,7 +181,7 @@ public:
     }
 
     size_t load_memory_walks(bid_t exec_block) {
-        
+
         /* load in memory walks */
         for (tid_t t = 0; t < nthreads; t++)
         {

@@ -25,7 +25,7 @@ public:
     size_t total_times;
     double sum_avg_steps;
 #endif
-    
+
 
     graph_engine(graph_cache& _cache, graph_walk& manager, graph_driver& _driver, graph_config& _conf, metrics &m) : _m(m){
         cache         = &_cache;
@@ -50,9 +50,8 @@ public:
         logstream(LOG_INFO) << "Random walks, random generate " << userprogram.get_numsources() << " walks on whole graph, exec_threads = " << conf->nthreads << std::endl;
         logstream(LOG_INFO) << "vertices : " << conf->nvertices << ", edges : " << conf->nedges << std::endl;
         srand(time(0));
-        tid_t exec_threads = conf->nthreads;
-        omp_set_num_threads(exec_threads);
 
+        omp_set_num_threads(conf->nthreads);
         _m.start_time("run_app");
         userprogram.prologue(walk_manager, init_func);
     }
@@ -63,7 +62,7 @@ public:
         logstream(LOG_INFO) << "Random walks start executing, please wait for a minute." << std::endl;
         gtimer.start_time();
         int run_count = 0;
-        wid_t interval_max_walks = 32 * MAX_TWALKS;
+        wid_t interval_max_walks = conf->max_nthreads * MAX_TWALKS;
         bid_t nblocks = walk_manager->nblocks;
         while(!walk_manager->test_finished_walks()) {
             wid_t total_walks = walk_manager->nwalks();

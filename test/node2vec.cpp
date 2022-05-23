@@ -25,6 +25,7 @@ int main(int argc, const char *argv[])
     bool sorted   = get_option_bool("sorted");
     bool skip     = get_option_bool("skip"); // use to skip the interactive convert query
     size_t blocksize = get_option_long("blocksize", BLOCK_SIZE);
+    size_t nthreads = get_option_int("nthreads", omp_get_max_threads());
     size_t dynamic   = get_option_bool("dynamic"); // the blocksize is dynamic, according to the number of walks
     size_t cache_size = get_option_int("cache", MEMORY_CACHE / (1024LL * 1024 * 1024));
     size_t max_iter = get_option_int("iter", 30);
@@ -44,7 +45,7 @@ int main(int argc, const char *argv[])
 
         blocksize= 1LL * pow(2, 11 + dom) * 1024;
         logstream(LOG_INFO) << "determined blocksize = " << blocksize / (1024 * 1024) << "MB." << std::endl;
-        return blocksize; 
+        return blocksize;
     };
 
     std::function<size_t(vid_t nvertices)> query_blocksize;
@@ -64,6 +65,7 @@ int main(int argc, const char *argv[])
         base_name,
         cache_size * 1024LL * 1024 * 1024,
         blocksize,
+        (tid_t)nthreads,
         (tid_t)omp_get_max_threads(),
         nvertices,
         nedges,

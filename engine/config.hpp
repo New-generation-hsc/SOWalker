@@ -14,6 +14,7 @@ struct graph_config {
     size_t cache_size;
     size_t blocksize;
     tid_t nthreads;
+    tid_t max_nthreads;
 
     vid_t nvertices;
     eid_t nedges;
