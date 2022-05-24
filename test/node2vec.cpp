@@ -116,6 +116,7 @@ int main(int argc, const char *argv[])
     // lp_solver_scheduler_t walk_scheduler(m);
     simulated_annealing_scheduler_t walk_scheduler(max_iter, m);
     // navie_graphwalker_scheduler_t walk_scheduler(m);
+    // random_scheduler_t walk_scheduler(m);
 
     auto init_func = [walks](graph_walk *walk_manager)
     {
