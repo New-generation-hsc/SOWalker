@@ -23,7 +23,7 @@ an novel second-order graph processing system for random walk
 ## Node2vec
 
 ```
-./bin/test/node2vec /home/hsc/dataset/livejournal/w-soc-livejournal.txt sample reject length 20 walkpersource 1
+./bin/test/node2vec /dataset/livejournal/w-soc-livejournal.txt sample reject length 20 walkpersource 1
 ```
 
 # Install OR-tools
