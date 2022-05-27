@@ -133,23 +133,12 @@ size_t reject_sample_impl(const iterator_type &first, const iterator_type &last,
     return rand_pos;
 }
 
-class sample_t {
-public:
-    bool use_alias;
-    bool use_acc_weight;
-    sample_t() : use_alias(false), use_acc_weight(false) {}
-    sample_t(bool acc_weight) : use_alias(false), use_acc_weight(acc_weight) {}
-    sample_t(bool alias, bool acc_weight) : use_alias(alias), use_acc_weight(acc_weight) {}
-};
-
-class sample_policy_t : public sample_t
+class sample_policy_t
 {
 private:
     uint64_t sample_counter;
 public:
     sample_policy_t() { sample_counter = 0; }
-    sample_policy_t(bool acc_weight) : sample_t(acc_weight) { sample_counter = 0; }
-    sample_policy_t(bool alias, bool acc_weight) : sample_t(alias, acc_weight) { sample_counter = 0; }
 
     virtual size_t sample(const std::vector<real_t>& weights) {
         return INF;
@@ -214,8 +203,6 @@ public:
 class its_sample_t : public sample_policy_t {
 public:
     its_sample_t() {}
-    its_sample_t(bool acc_weight) : sample_policy_t(acc_weight) {}
-    its_sample_t(bool alias, bool acc_weight) : sample_policy_t(alias, acc_weight) {}
 
     virtual size_t sample(const std::vector<real_t> &weights)
     {
@@ -260,8 +247,6 @@ public:
 class alias_sample_t : public sample_policy_t {
 public:
     alias_sample_t() {}
-    alias_sample_t(bool acc_weight) : sample_policy_t(acc_weight) {}
-    alias_sample_t(bool alias, bool acc_weight) : sample_policy_t(alias, acc_weight) {}
 
     virtual size_t sample(const std::vector<real_t> &weights)
     {
@@ -306,8 +291,6 @@ public:
 class reject_sample_t : public sample_policy_t {
 public:
     reject_sample_t() {}
-    reject_sample_t(bool acc_weight) : sample_policy_t(acc_weight) {}
-    reject_sample_t(bool alias, bool acc_weight) : sample_policy_t(alias, acc_weight) {}
 
     virtual size_t sample(const std::vector<real_t> &weights)
     {

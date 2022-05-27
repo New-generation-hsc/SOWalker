@@ -95,9 +95,9 @@ int main(int argc, const char *argv[])
     second_order_app_t userprogram(walks, steps, app_func);
     graph_engine engine(cache, walk_mangager, driver, conf, m);
 
-    its_sample_t its_sampler(true);
-    alias_sample_t alias_sampler(true);
-    reject_sample_t reject_sampler(true);
+    its_sample_t its_sampler;
+    alias_sample_t alias_sampler;
+    reject_sample_t reject_sampler;
 
     // scheduler *scheduler = nullptr;
     sample_policy_t *sampler = nullptr;
@@ -117,6 +117,8 @@ int main(int argc, const char *argv[])
     simulated_annealing_scheduler_t walk_scheduler(max_iter, m);
     // navie_graphwalker_scheduler_t walk_scheduler(m);
     // random_scheduler_t walk_scheduler(m);
+    // greedy_scheduler_t walk_scheduler(m);
+    // greedy_graphwalker_scheduler_t walk_scheduler(m);
 
     auto init_func = [walks](graph_walk *walk_manager)
     {

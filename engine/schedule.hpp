@@ -677,4 +677,254 @@ public:
     }
 };
 
+
+/**
+ * @brief the greedy scheduler choose `m` blocks which have the most expected step
+ * 
+ */
+class greedy_scheduler_t : public scheduler
+{
+private:
+    void choose_blocks(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
+    {
+        std::unordered_set<bid_t> cache_blocks;
+        for (bid_t blk = 0; blk < cache.ncblock; blk++)
+        {
+            if (cache.cache_blocks[blk].block != NULL)
+            {
+                cache_blocks.insert(cache.cache_blocks[blk].block->blk);
+            }
+        }
+
+        bid_t nblocks = walk_manager.nblocks;
+        std::vector<wid_t> block_walks(nblocks * nblocks);
+        for (bid_t blk = 0; blk < nblocks * nblocks; blk++)
+        {
+            block_walks[blk] = walk_manager.nblockwalks(blk);
+        }
+
+        std::vector<wid_t> from_p_walks(nblocks, 0), to_p_walks(nblocks, 0);
+        for (bid_t p_blk = 0; p_blk < nblocks; p_blk++)
+        {
+            for (bid_t c_blk = 0; c_blk < nblocks; c_blk++)
+            {
+                to_p_walks[c_blk] += block_walks[p_blk * nblocks + c_blk];
+                from_p_walks[p_blk] += block_walks[p_blk * nblocks + c_blk];
+            }
+        }
+
+        std::vector<bid_t> remaining_blocks;
+        for (bid_t blk = 0; blk < nblocks; blk++)
+        {
+            if (to_p_walks[blk] > 0 || from_p_walks[blk] > 0) remaining_blocks.push_back(blk);
+        }
+
+        auto cmp = [&to_p_walks, &walk_manager](bid_t u, bid_t v)
+        {
+            return to_p_walks[u] * (*walk_manager.global_blocks)[u].exp_walk_len > to_p_walks[v] * (*walk_manager.global_blocks)[v].exp_walk_len;
+        };
+
+        std::sort(remaining_blocks.begin(), remaining_blocks.end(), cmp);
+
+        std::vector<bid_t> candidate_blocks;
+        for (bid_t blk_index = 0; blk_index < cache.ncblock && blk_index < remaining_blocks.size(); blk_index++)
+        {
+            candidate_blocks.push_back(remaining_blocks[blk_index]);
+        }
+
+        std::unordered_set<bid_t> bucket_uncached, bucket_cached;
+        for (bid_t blk = 0; blk < candidate_blocks.size(); blk++)
+        {
+            if (cache_blocks.find(candidate_blocks[blk]) != cache_blocks.end())
+            {
+                bucket_cached.insert(candidate_blocks[blk]);
+            }
+            else
+            {
+                bucket_uncached.insert(candidate_blocks[blk]);
+            }
+        }
+
+        size_t pos = 0;
+        for (auto blk : bucket_cached)
+        {
+            bid_t cache_index = (*(walk_manager.global_blocks))[blk].cache_index;
+            swap(cache.cache_blocks[pos], cache.cache_blocks[cache_index]);
+            cache.cache_blocks[pos].block->cache_index = pos;
+            cache.cache_blocks[cache_index].block->cache_index = cache_index;
+            std::cout << "swap block info, blk = " << blk << ", from " << cache_index << " to " << pos << std::endl;
+            pos++;
+        }
+
+        for (auto blk : bucket_uncached)
+        {
+            if (from_p_walks[blk] > 0 || to_p_walks[blk] > 0)
+            {
+                if (cache.cache_blocks[pos].block != NULL)
+                {
+                    cache.cache_blocks[pos].block->cache_index = nblocks;
+                }
+                std::cout << "load block info, blk = " << blk << " -> cache_index = " << pos << std::endl;
+                driver.load_block_info(cache, walk_manager.global_blocks, pos, blk);
+                pos++;
+            }
+        }
+
+        std::cout << "bucket sequence : " << candidate_blocks.size() << " ";
+        for (auto p_blk : candidate_blocks)
+        {
+            for (auto c_blk : candidate_blocks)
+            {
+                if (block_walks[p_blk * nblocks + c_blk] > 0)
+                {
+                    std::cout << p_blk << " -> " << c_blk << ", ";
+                    cache.walk_blocks.push_back(p_blk * nblocks + c_blk);
+                }
+            }
+        }
+        std::cout << std::endl;
+        if (cache.walk_blocks.empty())
+        {
+            logstream(LOG_ERROR) << "random scheduler choose blocks without walks to update." << std::endl;
+            exit(0);
+        }
+    }
+
+public:
+    greedy_scheduler_t(metrics &m) : scheduler(m) {}
+
+    bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
+    {
+        _m.start_time("greedy_scheduler_swap_blocks");
+        choose_blocks(cache, driver, walk_manager);
+        _m.stop_time("greedy_scheduler_swap_blocks");
+        return 0;
+    }
+};
+
+/**
+ * @brief the greedy scheduler choose `m` blocks which have the most walks
+ *
+ */
+class greedy_graphwalker_scheduler_t : public scheduler
+{
+private:
+    void choose_blocks(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
+    {
+        std::unordered_set<bid_t> cache_blocks;
+        for (bid_t blk = 0; blk < cache.ncblock; blk++)
+        {
+            if (cache.cache_blocks[blk].block != NULL)
+            {
+                cache_blocks.insert(cache.cache_blocks[blk].block->blk);
+            }
+        }
+
+        bid_t nblocks = walk_manager.nblocks;
+        std::vector<wid_t> block_walks(nblocks * nblocks);
+        for (bid_t blk = 0; blk < nblocks * nblocks; blk++)
+        {
+            block_walks[blk] = walk_manager.nblockwalks(blk);
+        }
+
+        std::vector<wid_t> from_p_walks(nblocks, 0), to_p_walks(nblocks, 0);
+        for (bid_t p_blk = 0; p_blk < nblocks; p_blk++)
+        {
+            for (bid_t c_blk = 0; c_blk < nblocks; c_blk++)
+            {
+                to_p_walks[c_blk] += block_walks[p_blk * nblocks + c_blk];
+                from_p_walks[p_blk] += block_walks[p_blk * nblocks + c_blk];
+            }
+        }
+
+        std::vector<bid_t> remaining_blocks;
+        for (bid_t blk = 0; blk < nblocks; blk++)
+        {
+            if (to_p_walks[blk] > 0 || from_p_walks[blk] > 0)
+                remaining_blocks.push_back(blk);
+        }
+
+        auto cmp = [&to_p_walks, &walk_manager](bid_t u, bid_t v)
+        {
+            return to_p_walks[u] > to_p_walks[v];
+        };
+
+        std::sort(remaining_blocks.begin(), remaining_blocks.end(), cmp);
+
+        std::vector<bid_t> candidate_blocks;
+        for (bid_t blk_index = 0; blk_index < cache.ncblock && blk_index < remaining_blocks.size(); blk_index++)
+        {
+            candidate_blocks.push_back(remaining_blocks[blk_index]);
+        }
+
+        std::unordered_set<bid_t> bucket_uncached, bucket_cached;
+        for (bid_t blk = 0; blk < candidate_blocks.size(); blk++)
+        {
+            if (cache_blocks.find(candidate_blocks[blk]) != cache_blocks.end())
+            {
+                bucket_cached.insert(candidate_blocks[blk]);
+            }
+            else
+            {
+                bucket_uncached.insert(candidate_blocks[blk]);
+            }
+        }
+
+        size_t pos = 0;
+        for (auto blk : bucket_cached)
+        {
+            bid_t cache_index = (*(walk_manager.global_blocks))[blk].cache_index;
+            swap(cache.cache_blocks[pos], cache.cache_blocks[cache_index]);
+            cache.cache_blocks[pos].block->cache_index = pos;
+            cache.cache_blocks[cache_index].block->cache_index = cache_index;
+            std::cout << "swap block info, blk = " << blk << ", from " << cache_index << " to " << pos << std::endl;
+            pos++;
+        }
+
+        for (auto blk : bucket_uncached)
+        {
+            if (from_p_walks[blk] > 0 || to_p_walks[blk] > 0)
+            {
+                if (cache.cache_blocks[pos].block != NULL)
+                {
+                    cache.cache_blocks[pos].block->cache_index = nblocks;
+                }
+                std::cout << "load block info, blk = " << blk << " -> cache_index = " << pos << std::endl;
+                driver.load_block_info(cache, walk_manager.global_blocks, pos, blk);
+                pos++;
+            }
+        }
+
+        std::cout << "bucket sequence : " << candidate_blocks.size() << " ";
+        for (auto p_blk : candidate_blocks)
+        {
+            for (auto c_blk : candidate_blocks)
+            {
+                if (block_walks[p_blk * nblocks + c_blk] > 0)
+                {
+                    std::cout << p_blk << " -> " << c_blk << ", ";
+                    cache.walk_blocks.push_back(p_blk * nblocks + c_blk);
+                }
+            }
+        }
+        std::cout << std::endl;
+        if (cache.walk_blocks.empty())
+        {
+            logstream(LOG_ERROR) << "random scheduler choose blocks without walks to update." << std::endl;
+            exit(0);
+        }
+    }
+
+public:
+    greedy_graphwalker_scheduler_t(metrics &m) : scheduler(m) {}
+
+    bid_t schedule(graph_cache &cache, graph_driver &driver, graph_walk &walk_manager)
+    {
+        _m.start_time("greedy_graphwalker_scheduler_swap_blocks");
+        choose_blocks(cache, driver, walk_manager);
+        _m.stop_time("greedy_graphwalker_scheduler_swap_blocks");
+        return 0;
+    }
+};
+
 #endif
