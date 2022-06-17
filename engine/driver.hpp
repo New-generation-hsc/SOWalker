@@ -57,7 +57,7 @@ public:
         cache.cache_blocks[cache_index].block->cache_index = cache_index;
 
         cache.cache_blocks[cache_index].beg_pos = (eid_t *)realloc(cache.cache_blocks[cache_index].beg_pos, (global_blocks->blocks[block_index].nverts + 1) * sizeof(eid_t));
-        cache.cache_blocks[cache_index].csr = (vid_t *)realloc(cache.cache_blocks[cache_index].csr, global_blocks->blocks[block_index].nedges * sizeof(vid_t));
+        // cache.cache_blocks[cache_index].csr = (vid_t *)realloc(cache.cache_blocks[cache_index].csr, global_blocks->blocks[block_index].nedges * sizeof(vid_t));
 
         load_block_vertex(vertdesc, cache.cache_blocks[cache_index].beg_pos, global_blocks->blocks[block_index]);
         load_block_edge(edgedesc, cache.cache_blocks[cache_index].csr, global_blocks->blocks[block_index]);

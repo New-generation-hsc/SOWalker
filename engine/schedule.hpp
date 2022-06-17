@@ -18,7 +18,6 @@
 #include "walk.hpp"
 #include "util/util.hpp"
 #include "util/io.hpp"
-#include "sample.hpp"
 #include "util/lp_solver.hpp"
 
 template<typename value_t>

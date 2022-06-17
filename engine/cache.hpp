@@ -205,6 +205,9 @@ public:
 
     graph_cache(bid_t nblocks, graph_config *conf) {
         setup(nblocks, conf->cache_size, conf->blocksize);
+        for(bid_t blk = 0; blk < nblocks; blk++) {
+            cache_blocks[blk].csr = (vid_t*)malloc(conf->blocksize);
+        }
     }
 
     cache_block& operator[](size_t index) {

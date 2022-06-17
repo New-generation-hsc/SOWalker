@@ -47,7 +47,7 @@ public:
 
         totblocks = nblocks * nblocks;
         maxhops.resize(totblocks, 0);
-        walks.alloc(conf.max_nthreads * MAX_TWALKS);
+        walks.alloc(conf.max_nthreads * MAX_TWALKS * 5);
 
         block_nmwalk.resize(totblocks);
         for (bid_t blk = 0; blk < totblocks; blk++)
@@ -106,8 +106,7 @@ public:
     void move_walk(const walker_t &walker)
     {
         tid_t t = static_cast<vid_t>(omp_get_thread_num());
-        bid_t pblk = global_blocks->get_block(WALKER_PREVIOUS(walker));
-        bid_t cblk = global_blocks->get_block(WALKER_POS(walker));
+        bid_t pblk = WALKER_PREV_BLOCK(walker), cblk = WALKER_CUR_BLOCK(walker);
         bid_t blk = pblk * nblocks + cblk;
         if(block_walks[blk][t].full()) {
             persistent_walks(blk, t);
@@ -115,7 +114,6 @@ public:
 
         block_nmwalk[blk][t] += 1;
         block_walks[blk][t].push_back(walker);
-        global_blocks->update_rank(WALKER_POS(walker));
     }
 
     void persistent_walks(bid_t blk, tid_t t)
@@ -214,9 +212,6 @@ public:
         std::fill(block_ndwalk[exec_block].begin(), block_ndwalk[exec_block].end(), 0);
         block_desc_manager_t block_desc(get_walk_name(base_name, blocksize, exec_block));
         ftruncate(block_desc.get_desc(), 0);
-
-        global_blocks->reset_rank(exec_block % nblocks);
-        maxhops[exec_block] = 0;
     }
 
     bool test_finished_walks()
@@ -243,25 +238,6 @@ public:
             }
         }
         return blk;
-    }
-
-    void set_max_hop(const walker_t& walker) {
-        bid_t pblk = global_blocks->get_block(WALKER_PREVIOUS(walker));
-        bid_t cblk = global_blocks->get_block(WALKER_POS(walker));
-        bid_t blk = pblk * nblocks + cblk;
-        hid_t hop = WALKER_HOP(walker);
-        #pragma omp critical
-        {
-            if(maxhops[blk] < hop) maxhops[blk] = hop;
-        }
-    }
-
-    void set_max_hop(bid_t blk, hid_t hop)
-    {
-        #pragma omp critical
-        {
-            if (maxhops[blk] < hop) maxhops[blk] = hop;
-        }
     }
 
     bid_t max_hops_block()

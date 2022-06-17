@@ -6,7 +6,6 @@
 #include "schedule.hpp"
 #include "util/timer.hpp"
 #include "metrics/metrics.hpp"
-#include "sample.hpp"
 #include "apps/secondorder.hpp"
 
 class graph_engine {
@@ -16,7 +15,8 @@ public:
     graph_driver                        *driver;
     graph_config                        *conf;
     graph_timer                         gtimer;
-    std::vector<unsigned int>           seeds;
+    // std::vector<unsigned int>           seeds;
+    std::vector<RandNum>                seeds;
 
     // statistic metric
     metrics &_m;
@@ -32,7 +32,8 @@ public:
         walk_manager = &manager;
         driver        = &_driver;
         conf          = &_conf;
-        seeds = std::vector<unsigned int>(conf->nthreads);
+        // seeds = std::vector<unsigned int>(conf->nthreads);
+        seeds = std::vector<RandNum>(conf->nthreads, RandNum(9898676785859));
         for(tid_t tid = 0; tid < conf->nthreads; tid++) {
             seeds[tid] = time(NULL) + tid;
         }
@@ -56,13 +57,13 @@ public:
         userprogram.prologue(walk_manager, init_func);
     }
 
-    void run(second_order_app_t &userprogram, scheduler *block_scheduler, sample_policy_t *sampler)
+    void run(second_order_app_t &userprogram, scheduler *block_scheduler)
     {
         logstream(LOG_DEBUG) << "graph blocks : " << walk_manager->global_blocks->nblocks << ", memory blocks : " << cache->ncblock << std::endl;
         logstream(LOG_INFO) << "Random walks start executing, please wait for a minute." << std::endl;
         gtimer.start_time();
         int run_count = 0;
-        wid_t interval_max_walks = conf->max_nthreads * MAX_TWALKS;
+        wid_t interval_max_walks = conf->max_nthreads * MAX_TWALKS * 5;
         bid_t nblocks = walk_manager->nblocks;
         while(!walk_manager->test_finished_walks()) {
             wid_t total_walks = walk_manager->nwalks();
@@ -72,6 +73,11 @@ public:
             block_scheduler->schedule(*cache, *driver, *walk_manager);
             size_t pos = 0;
             logstream(LOG_DEBUG) << "cache walk block size : " << cache->walk_blocks.size() << std::endl;
+            std::cout << "cache index : ";
+            for(bid_t blk = 0; blk < walk_manager->global_blocks->nblocks; blk++) {
+                std::cout << (*(walk_manager->global_blocks))[blk].cache_index << " ";
+            }
+            std::cout << std::endl;
             while(pos < cache->walk_blocks.size()) {
                 wid_t nwalks = 0;
                 walk_manager->walks.clear();
@@ -80,7 +86,7 @@ public:
                     walk_manager->load_memory_walks(cache->walk_blocks[pos]);
                     pos++;
                 }
-                update_walk(userprogram, nwalks, sampler);
+                update_walk(userprogram, nwalks);
                 logstream(LOG_DEBUG) << "load memory walks, pos = " << pos << ", walks = " << nwalks << std::endl;
             }
             pos = 0;
@@ -91,7 +97,7 @@ public:
                     num_disk_walks -= interval_walks;
                     wid_t nwalks = walk_manager->load_disk_walks(cache->walk_blocks[pos], interval_walks, disk_load_walks);
                     disk_load_walks += interval_walks;
-                    update_walk(userprogram, nwalks, sampler);
+                    update_walk(userprogram, nwalks);
                     logstream(LOG_DEBUG) << "load disk walks from " << cache->walk_blocks[pos] / nblocks << " to " << cache->walk_blocks[pos] % nblocks << ", walks = " << nwalks << std::endl;
                 }
                 walk_manager->dump_walks(cache->walk_blocks[pos]);
@@ -112,17 +118,22 @@ public:
         logstream(LOG_INFO) << "  ================= FINISHED ======================  " << std::endl;
     }
 
-    void update_walk(second_order_app_t &userprogram, wid_t nwalks, sample_policy_t *sampler)
+    void update_walk(second_order_app_t &userprogram, wid_t nwalks)
     {
         if(nwalks < 100) omp_set_num_threads(1);
         else omp_set_num_threads(conf->nthreads);
 
         _m.start_time("exec_block_walk");
         {
-            wid_t run_steps = 0;
-            #pragma omp parallel for reduction(+: run_steps)
+            // wid_t run_steps = 0;
+            // #pragma omp parallel for reduction(+: run_steps)
+            // for(wid_t idx = 0; idx < nwalks; idx++) {
+            //     run_steps += userprogram.update_walk(walk_manager->walks[idx], cache, walk_manager, sampler, &seeds[omp_get_thread_num()]);
+            // }
+            logstream(LOG_INFO) << gtimer.runtime() << "s, nwalks : " << nwalks << std::endl;
+            #pragma omp parallel for schedule(dynamic)
             for(wid_t idx = 0; idx < nwalks; idx++) {
-                run_steps += userprogram.update_walk(walk_manager->walks[idx], cache, walk_manager, sampler, &seeds[omp_get_thread_num()]);
+                userprogram.update_walk(walk_manager->walks[idx], cache, walk_manager, &seeds[omp_get_thread_num()]);
             }
 #ifdef PROF_STEPS
             total_times++;

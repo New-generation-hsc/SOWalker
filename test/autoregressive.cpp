@@ -5,7 +5,6 @@
 #include "engine/schedule.hpp"
 #include "engine/walk.hpp"
 #include "engine/engine.hpp"
-#include "engine/sample.hpp"
 #include "logger/logger.hpp"
 #include "util/io.hpp"
 #include "util/util.hpp"
@@ -75,60 +74,12 @@ int main(int argc, const char *argv[])
     graph_driver driver(&conf, m);
 
     graph_walk walk_mangager(conf, driver, blocks);
-
     graph_cache cache(min_value(nmblocks, blocks.nblocks), &conf);
+    m.set("nblocks", std::to_string(blocks.nblocks));
+    m.set("ncblocks", std::to_string(cache.ncblock));
 
-    transit_func_t app_func;
-    app_func.query_equal_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    {
-        vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
-        return (1.0 - alpha) * max_degree / cur_vertex.degree;
-    };
-    app_func.query_comm_neighbor_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    {
-        vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
-        return (1.0 - alpha) * max_degree / cur_vertex.degree +  alpha * max_degree / prev_vertex.degree;
-    };
-    app_func.query_other_vertex_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    {
-        vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
-        return (1.0 - alpha) * max_degree / cur_vertex.degree;
-    };
-    app_func.query_upper_bound_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    {
-        vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
-        if(prev_vertex.degree > 0)
-            return (1.0 - alpha) * max_degree / cur_vertex.degree + alpha * max_degree / prev_vertex.degree;
-        else
-            return (1.0 - alpha) * max_degree / cur_vertex.degree;
-    };
-    app_func.query_lower_bound_func = [&alpha](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    {
-        vid_t max_degree = std::max(prev_vertex.degree, cur_vertex.degree);
-        return (1.0 - alpha) * max_degree / cur_vertex.degree;
-    };
-
-    second_order_app_t userprogram(walks, steps, app_func);
+    autoregreesive_app_t userprogram(walks, steps, alpha);
     graph_engine engine(cache, walk_mangager, driver, conf, m);
-
-    naive_sample_t naive_sampler;
-    its_sample_t its_sampler;
-    alias_sample_t alias_sampler;
-    reject_sample_t reject_sampler;
-
-    // scheduler *scheduler = nullptr;
-    sample_policy_t *sampler = nullptr;
-    std::string type = get_option_string("sample", "its");
-    if (type == "its")
-        sampler = &its_sampler;
-    else if (type == "alias")
-        sampler = &alias_sampler;
-    else if (type == "reject")
-        sampler = &reject_sampler;
-    else
-        sampler = &its_sampler;
-
-    logstream(LOG_INFO) << "sample policy : " << sampler->sample_name() << std::endl;
 
     lp_solver_scheduler_t walk_scheduler(m);
 
@@ -138,16 +89,16 @@ int main(int argc, const char *argv[])
         for(wid_t off = 0; off < walks; off++)
         {
             vid_t vertex = rand() % walk_manager->nvertices;
-            walker_t walker = walker_makeup(off, vertex, vertex, vertex, 0);
+            bid_t index = walk_manager->global_blocks->get_block(vertex);
+            walker_t walker = walker_makeup(off, vertex, vertex, vertex, 0, index, index);
             walk_manager->move_walk(walker);
         }
     };
 
     engine.prologue(userprogram, init_func);
-    engine.run(userprogram, &walk_scheduler, sampler);
+    engine.run(userprogram, &walk_scheduler);
     engine.epilogue(userprogram);
 
-    sampler->report();
     metrics_report(m);
 
     return 0;

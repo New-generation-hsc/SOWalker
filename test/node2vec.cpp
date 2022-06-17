@@ -6,7 +6,6 @@
 #include "engine/schedule.hpp"
 #include "engine/walk.hpp"
 #include "engine/engine.hpp"
-#include "engine/sample.hpp"
 #include "logger/logger.hpp"
 #include "util/io.hpp"
 #include "util/util.hpp"
@@ -31,8 +30,8 @@ int main(int argc, const char *argv[])
     size_t max_iter = get_option_int("iter", 30);
     wid_t walks = (wid_t)get_option_int("walkpersource", 1);
     hid_t steps = (hid_t)get_option_int("length", 20);
-    real_t p = (real_t)get_option_float("p", 0.5);
-    real_t q = (real_t)get_option_float("q", 2.0);
+    real_t p = (real_t)get_option_float("p", 1.0); // 0.5
+    real_t q = (real_t)get_option_float("q", 1.0); // 2.0
 
     auto static_query_blocksize = [blocksize](vid_t nvertices) { return blocksize; };
     auto dynamic_query_blocksize = [&blocksize, walks](vid_t nvertices) {
@@ -80,38 +79,11 @@ int main(int argc, const char *argv[])
     bid_t nmblocks = get_option_int("nmblocks", blocks.nblocks);
     graph_cache cache(min_value(nmblocks, blocks.nblocks), &conf);
 
-    transit_func_t app_func;
-    app_func.query_equal_func = [&p, &q](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    { return 1.0 / p; };
-    app_func.query_comm_neighbor_func = [&p, &q](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    { return 1.0; };
-    app_func.query_other_vertex_func = [&p, &q](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    { return 1.0 / q; };
-    app_func.query_upper_bound_func = [&p, &q](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    { return std::max(1.0 / p, std::max(1.0, 1.0 / q)); };
-    app_func.query_lower_bound_func = [&p, &q](const transit_context_t &prev_vertex, const transit_context_t &cur_vertex)
-    { return std::min(1.0 / p, std::min(1.0, 1.0 / q)); };
+    m.set("nblocks", std::to_string(blocks.nblocks));
+    m.set("ncblocks", std::to_string(cache.ncblock));
 
-    second_order_app_t userprogram(walks, steps, app_func);
+    node2vec_app_t userprogram(walks, steps, p, q);
     graph_engine engine(cache, walk_mangager, driver, conf, m);
-
-    its_sample_t its_sampler;
-    alias_sample_t alias_sampler;
-    reject_sample_t reject_sampler;
-
-    // scheduler *scheduler = nullptr;
-    sample_policy_t *sampler = nullptr;
-    std::string type = get_option_string("sample", "its");
-    if (type == "its")
-        sampler = &its_sampler;
-    else if (type == "alias")
-        sampler = &alias_sampler;
-    else if (type == "reject")
-        sampler = &reject_sampler;
-    else
-        sampler = &its_sampler;
-
-    logstream(LOG_INFO) << "sample policy : " << sampler->sample_name() << std::endl;
 
     // lp_solver_scheduler_t walk_scheduler(m);
     simulated_annealing_scheduler_t walk_scheduler(max_iter, m);
@@ -127,21 +99,21 @@ int main(int argc, const char *argv[])
         {
             wid_t idx = vertex * walks;
             for(wid_t off = 0; off < walks; off++) {
-                walker_t walker = walker_makeup(idx + off, vertex, vertex, vertex, 0);
+                bid_t index = walk_manager->global_blocks->get_block(vertex);
+                walker_t walker = walker_makeup(idx + off, vertex, vertex, vertex, 0, index, index);
                 walk_manager->move_walk(walker);
             }
         }
     };
 
     engine.prologue(userprogram, init_func);
-    engine.run(userprogram, &walk_scheduler, sampler);
+    engine.run(userprogram, &walk_scheduler);
     engine.epilogue(userprogram);
 
 #ifdef PROF_METRIC
     blocks.report();
 #endif
 
-    sampler->report();
     metrics_report(m);
 
     return 0;
