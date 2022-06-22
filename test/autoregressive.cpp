@@ -28,6 +28,7 @@ int main(int argc, const char *argv[])
     size_t cache_size = get_option_int("cache", MEMORY_CACHE / (1024LL * 1024 * 1024));
     size_t max_iter = get_option_int("iter", 30);
     wid_t walks = (wid_t)get_option_int("walksource", 100000);
+    wid_t walkpersource = (wid_t)get_option_int("walkpersource", 1);
     hid_t steps = (hid_t)get_option_int("length", 25);
     real_t alpha = (real_t)get_option_float("alpha", 0.2);
 
@@ -83,15 +84,18 @@ int main(int argc, const char *argv[])
 
     lp_solver_scheduler_t walk_scheduler(m);
 
-    auto init_func = [walks](graph_walk *walk_manager)
+    auto init_func = [walks, walkpersource](graph_walk *walk_manager)
     {
         #pragma omp parallel for schedule(static)
         for(wid_t off = 0; off < walks; off++)
         {
             vid_t vertex = rand() % walk_manager->nvertices;
             bid_t index = walk_manager->global_blocks->get_block(vertex);
-            walker_t walker = walker_makeup(off, vertex, vertex, vertex, 0, index, index);
-            walk_manager->move_walk(walker);
+            for(wid_t cnt = 0; cnt < walkpersource; cnt++) {
+                wid_t walker_id = off * walkpersource + cnt;
+                walker_t walker = walker_makeup(walker_id, vertex, vertex, vertex, 0, index, index);
+                walk_manager->move_walk(walker);
+            }
         }
     };
 
