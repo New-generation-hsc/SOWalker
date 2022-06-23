@@ -184,43 +184,43 @@ public:
             vid_t next_vertex = 0;
 
             eid_t deg = adj_tail - adj_head, prev_deg = prev_adj_tail - prev_adj_head;
-            // eid_t max_deg = std::max(deg, prev_deg);
+            eid_t max_deg = std::max(deg, prev_deg);
             if (deg == 0) next_vertex = seed->iRand(walk_manager->nvertices);
             else
             {
-                // std::vector<real_t> adj_weights(deg + 1, 0.0);
-                // std::unordered_set<vid_t> prev_neighbors(prev_block->csr + prev_adj_head, prev_block->csr + prev_adj_tail);
-                // for(size_t index = 0; index < deg; ++index) {
-                //     real_t wht = 0.0;
-                //     if(cur_block->csr[adj_head + index] == prev_vertex) {
-                //         wht = (1.0 - alpha) / deg;
-                //     }else if(prev_neighbors.find(cur_block->csr[adj_head + index]) != prev_neighbors.end()) {
-                //         wht = (1.0 - alpha) / deg + alpha / prev_deg;
-                //     }else {
-                //         wht = (1.0 - alpha) / deg;
-                //     }
-                //     adj_weights[index + 1] = adj_weights[index] + wht * max_deg;
-                // }
-
-                // real_t rand_val = seed->dRand() * adj_weights[deg];
-                // size_t pos = std::upper_bound(adj_weights.begin(), adj_weights.end(), rand_val) - adj_weights.begin();
-                // next_vertex = cur_block->csr[adj_head + pos - 1];
+                std::vector<real_t> adj_weights(deg + 1, 0.0);
                 std::unordered_set<vid_t> prev_neighbors(prev_block->csr + prev_adj_head, prev_block->csr + prev_adj_tail);
-                if(prev_neighbors.size() == 0)  {
-                    next_vertex = cur_block->csr[seed->iRand(static_cast<uint32_t>(deg))];
-                } else {
-                    size_t comm_deg = prev_neighbors.size();
-                    real_t avg_wht = (1.0 - alpha + alpha / prev_deg * comm_deg) / deg;
-                    real_t rand_val = seed->dRand() * avg_wht;
-                    size_t rand_pos = seed->iRand(static_cast<uint32_t>(deg));
-                    if(rand_val > (1.0 - alpha) && prev_neighbors.find(cur_block->csr[adj_head + rand_pos]) == prev_neighbors.end()) {
-                        size_t pos = seed->iRand(static_cast<uint32_t>(comm_deg));
-                        std::vector<vid_t> tmp_adj(prev_neighbors.begin(), prev_neighbors.end());
-                        next_vertex = tmp_adj[pos];
-                    } else {
-                        next_vertex = cur_block->csr[adj_head + rand_pos];
+                for(size_t index = 0; index < deg; ++index) {
+                    real_t wht = 0.0;
+                    if(cur_block->csr[adj_head + index] == prev_vertex) {
+                        wht = (1.0 - alpha) / deg;
+                    }else if(prev_neighbors.find(cur_block->csr[adj_head + index]) != prev_neighbors.end()) {
+                        wht = (1.0 - alpha) / deg + alpha / prev_deg;
+                    }else {
+                        wht = (1.0 - alpha) / deg;
                     }
+                    adj_weights[index + 1] = adj_weights[index] + wht * max_deg;
                 }
+
+                real_t rand_val = seed->dRand() * adj_weights[deg];
+                size_t pos = std::upper_bound(adj_weights.begin(), adj_weights.end(), rand_val) - adj_weights.begin();
+                next_vertex = cur_block->csr[adj_head + pos - 1];
+                // std::unordered_set<vid_t> prev_neighbors(prev_block->csr + prev_adj_head, prev_block->csr + prev_adj_tail);
+                // if(prev_neighbors.size() == 0)  {
+                //     next_vertex = cur_block->csr[seed->iRand(static_cast<uint32_t>(deg))];
+                // } else {
+                //     size_t comm_deg = prev_neighbors.size();
+                //     real_t avg_wht = (1.0 - alpha + alpha / prev_deg * comm_deg) / deg;
+                //     real_t rand_val = seed->dRand() * avg_wht;
+                //     size_t rand_pos = seed->iRand(static_cast<uint32_t>(deg));
+                //     if(rand_val > (1.0 - alpha) && prev_neighbors.find(cur_block->csr[adj_head + rand_pos]) == prev_neighbors.end()) {
+                //         size_t pos = seed->iRand(static_cast<uint32_t>(comm_deg));
+                //         std::vector<vid_t> tmp_adj(prev_neighbors.begin(), prev_neighbors.end());
+                //         next_vertex = tmp_adj[pos];
+                //     } else {
+                //         next_vertex = cur_block->csr[adj_head + rand_pos];
+                //     }
+                // }
             }
 
             prev_vertex = cur_vertex;
